@@ -219,3 +219,47 @@ select.form-control option {
   box-shadow: 0 6px 18px rgba(37, 99, 235, 0.5);
   transform: translateY(-1px);
 }
+
+/* Measurements Section */
+.measurements-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.65rem 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.measurements-toggle:hover {
+  color: var(--color-text-primary);
+}
+
+.measurements-toggle-hint {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.measurements-toggle-chevron {
+  margin-left: auto;
+  font-size: 0.7rem;
+  transition: transform 0.2s ease;
+}
+
+.measurements-toggle.expanded .measurements-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+.measurements-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  padding-top: 0.6rem;
+}

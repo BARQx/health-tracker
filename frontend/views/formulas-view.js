@@ -13,7 +13,12 @@ import {
   calculateIdealBodyWeight,
   mifflinStJeorBmr,
   revisedHarrisBenedictBmr,
-  calculateTdee
+  calculateTdee,
+  waistToHipRatio,
+  waistToHeightRatio,
+  navyBodyFat,
+  getWhrCategory,
+  getWhtrCategory
 } from '../formulas.js';
 
 export function renderFormulas() {
@@ -265,12 +270,65 @@ export function renderFormulas() {
     </div>
   `;
 
+  const latestMeasurements = records[records.length - 1]?.measurements || {};
+  const waist = latestMeasurements.waistCm;
+  const hip = latestMeasurements.hipCm;
+  const neck = latestMeasurements.neckCm;
+  const chest = latestMeasurements.chestCm;
+  const arm = latestMeasurements.armCm;
+  const thigh = latestMeasurements.thighCm;
+  const hasAnyMeasurement = waist || hip || neck || chest || arm || thigh;
+
+  const whr = waist && hip ? waistToHipRatio(waist, hip) : 0;
+  const whtr = waist ? waistToHeightRatio(waist, heightCm) : 0;
+  const navyBf = waist && neck ? navyBodyFat(waist, neck, hip, heightCm, sex) : 0;
+  const whrCat = getWhrCategory(whr, sex);
+  const whtrCat = getWhtrCategory(whtr);
+
+  const tapeCard = `
+    <div class="formula-table-card">
+      <div class="formula-table-card-header">
+        <h3>📏 Tape Measurements & Ratios</h3>
+        ${hasAnyMeasurement ? `<span class="badge ${whtrCat.badgeClass}">${whtrCat.category}</span>` : '<span class="badge badge-normal">No data</span>'}
+      </div>
+      ${!hasAnyMeasurement ? `
+        <div style="text-align: center; color: var(--color-text-muted); padding: 2rem 1rem;">
+          Add body measurements (waist, hip, neck) when logging weight to unlock circumference-based analysis.
+        </div>
+      ` : `
+        <table class="formula-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${waist ? `<tr><td><span class="formula-name">Waist</span><span class="formula-note">Circumference at navel level</span></td><td><span class="formula-val">${Number(waist).toFixed(1)} cm</span></td></tr>` : ''}
+            ${hip ? `<tr><td><span class="formula-name">Hip</span><span class="formula-note">Widest circumference around glutes</span></td><td><span class="formula-val">${Number(hip).toFixed(1)} cm</span></td></tr>` : ''}
+            ${neck ? `<tr><td><span class="formula-name">Neck</span><span class="formula-note">Below larynx, perpendicular to axis</span></td><td><span class="formula-val">${Number(neck).toFixed(1)} cm</span></td></tr>` : ''}
+            ${chest ? `<tr><td><span class="formula-name">Chest</span><span class="formula-note">At nipple line, relaxed exhale</span></td><td><span class="formula-val">${Number(chest).toFixed(1)} cm</span></td></tr>` : ''}
+            ${arm ? `<tr><td><span class="formula-name">Arm / Bicep</span><span class="formula-note">Mid-upper arm, flexed peak</span></td><td><span class="formula-val">${Number(arm).toFixed(1)} cm</span></td></tr>` : ''}
+            ${thigh ? `<tr><td><span class="formula-name">Thigh</span><span class="formula-note">Mid-thigh, standing relaxed</span></td><td><span class="formula-val">${Number(thigh).toFixed(1)} cm</span></td></tr>` : ''}
+            ${whr > 0 ? `<tr><td><span class="formula-name">Waist-to-Hip Ratio (WHR)</span><span class="formula-note">WHO cardiovascular risk marker · ${whrCat.category}</span></td><td><span class="formula-val">${whr.toFixed(3)}</span></td></tr>` : ''}
+            ${whtr > 0 ? `<tr><td><span class="formula-name">Waist-to-Height Ratio (WHtR)</span><span class="formula-note">Universal health boundary: &lt;0.5 = healthy</span></td><td><span class="formula-val">${whtr.toFixed(3)}</span></td></tr>` : ''}
+            ${navyBf > 0 ? `<tr><td><span class="formula-name">US Navy Body Fat %</span><span class="formula-note">DoD circumference-based estimate</span></td><td><span class="formula-val">${navyBf.toFixed(1)}%</span></td></tr>` : ''}
+          </tbody>
+        </table>
+      `}
+      <div class="formula-table-footer">
+        Circumference-based metrics are clinically superior to BMI for predicting cardiovascular risk.
+      </div>
+    </div>
+  `;
+
   let html = '';
   if (activeTab === 'bmi') html = bmiCard;
   else if (activeTab === 'fat') html = fatCard;
   else if (activeTab === 'ibw') html = ibwCard;
   else if (activeTab === 'tdee') html = tdeeCard;
-  else html = bmiCard + fatCard + ibwCard + tdeeCard;
+  else if (activeTab === 'tape') html = tapeCard;
+  else html = bmiCard + fatCard + ibwCard + tdeeCard + tapeCard;
 
   container.innerHTML = html;
 }

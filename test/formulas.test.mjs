@@ -20,7 +20,12 @@ import {
   feetInchesToCm,
   cmToFeetInches,
   calculateGoalForecast,
-  sanitizeRecords
+  sanitizeRecords,
+  waistToHipRatio,
+  waistToHeightRatio,
+  navyBodyFat,
+  getWhrCategory,
+  getWhtrCategory
 } from '../frontend/formulas.js';
 
 test('calculateAge calculates exact completed years correctly', () => {
@@ -301,5 +306,81 @@ test('sanitizeRecords normalizes, coerces numbers, and purges corrupt entries', 
   assert.deepEqual(sanitizeRecords('string'), []);
 });
 
+test('waistToHipRatio calculates WHO cardiovascular risk ratio', () => {
+  // Male with 85cm waist, 100cm hip => 0.85
+  assert.equal(waistToHipRatio(85, 100), 0.85);
 
+  // Female with 70cm waist, 95cm hip => ~0.7368
+  const whr = waistToHipRatio(70, 95);
+  assert.ok(Math.abs(whr - 0.7368) < 0.001);
 
+  // Edge cases
+  assert.equal(waistToHipRatio(0, 100), 0);
+  assert.equal(waistToHipRatio(80, 0), 0);
+  assert.equal(waistToHipRatio(null, 95), 0);
+});
+
+test('waistToHeightRatio calculates universal health boundary ratio', () => {
+  // 80cm waist, 170cm height => ~0.4706
+  const whtr = waistToHeightRatio(80, 170);
+  assert.ok(Math.abs(whtr - 0.4706) < 0.001);
+
+  // 95cm waist, 165cm height => ~0.5758 (overweight range)
+  const whtr2 = waistToHeightRatio(95, 165);
+  assert.ok(Math.abs(whtr2 - 0.5758) < 0.001);
+
+  // Edge cases
+  assert.equal(waistToHeightRatio(0, 170), 0);
+  assert.equal(waistToHeightRatio(80, 0), 0);
+});
+
+test('navyBodyFat estimates body fat from circumference measurements', () => {
+  // Male: waist=85, neck=38, height=178
+  const maleBf = navyBodyFat(85, 38, null, 178, 'male');
+  assert.ok(maleBf > 10 && maleBf < 30, `Male BF% ${maleBf} should be in realistic range`);
+
+  // Female: waist=75, neck=33, hip=100, height=165
+  const femaleBf = navyBodyFat(75, 33, 100, 165, 'female');
+  assert.ok(femaleBf > 15 && femaleBf < 45, `Female BF% ${femaleBf} should be in realistic range`);
+
+  // Edge: waist <= neck should return 0
+  assert.equal(navyBodyFat(35, 38, null, 178, 'male'), 0);
+
+  // Edge: missing required inputs
+  assert.equal(navyBodyFat(0, 38, null, 178, 'male'), 0);
+  assert.equal(navyBodyFat(85, 0, null, 178, 'male'), 0);
+
+  // Female without hip measurement
+  assert.equal(navyBodyFat(75, 33, null, 165, 'female'), 0);
+});
+
+test('getWhrCategory classifies cardiovascular risk per WHO guidelines', () => {
+  // Male below threshold (< 0.90)
+  assert.equal(getWhrCategory(0.85, 'male').category, 'Low Risk');
+  // Male at moderate (0.90–0.95)
+  assert.equal(getWhrCategory(0.92, 'male').category, 'Moderate');
+  // Male elevated (>= 0.95)
+  assert.equal(getWhrCategory(0.98, 'male').category, 'Elevated');
+
+  // Female below threshold (< 0.85)
+  assert.equal(getWhrCategory(0.80, 'female').category, 'Low Risk');
+  // Female at moderate (0.85–0.90)
+  assert.equal(getWhrCategory(0.87, 'female').category, 'Moderate');
+  // Female elevated (>= 0.90)
+  assert.equal(getWhrCategory(0.95, 'female').category, 'Elevated');
+
+  // Edge: zero/invalid
+  assert.equal(getWhrCategory(0, 'male').category, '--');
+  assert.equal(getWhrCategory(-1, 'female').category, '--');
+});
+
+test('getWhtrCategory classifies waist-to-height ratio health risk', () => {
+  assert.equal(getWhtrCategory(0.40).category, 'Underweight');
+  assert.equal(getWhtrCategory(0.48).category, 'Healthy');
+  assert.equal(getWhtrCategory(0.55).category, 'Overweight');
+  assert.equal(getWhtrCategory(0.62).category, 'Obese');
+
+  // Edge: zero/invalid
+  assert.equal(getWhtrCategory(0).category, '--');
+  assert.equal(getWhtrCategory(-0.5).category, '--');
+});

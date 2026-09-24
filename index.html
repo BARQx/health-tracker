@@ -109,6 +109,7 @@
           <button class="pill-btn formula-tab-btn" data-tab="bmi">⚖️ BMI</button>
           <button class="pill-btn formula-tab-btn" data-tab="fat">🧬 Body Fat</button>
           <button class="pill-btn formula-tab-btn" data-tab="ibw">🎯 Ideal Weight</button>
+          <button class="pill-btn formula-tab-btn" data-tab="tape">📏 Tape</button>
           <button class="pill-btn formula-tab-btn" data-tab="tdee">🔥 Energy</button>
         </div>
       </div>
@@ -168,6 +169,39 @@
       <div class="form-group">
         <label class="form-label" for="log-notes">Notes (optional)</label>
         <input type="text" id="log-notes" class="form-control" placeholder="e.g. Felt well rested, hydrated">
+      </div>
+      <div class="form-group">
+        <button type="button" id="btn-toggle-measurements" class="measurements-toggle">
+          <span>📏 Body Measurements</span>
+          <span class="measurements-toggle-hint">(optional)</span>
+          <span class="measurements-toggle-chevron">▼</span>
+        </button>
+        <div id="measurements-fields" class="measurements-grid" style="display: none;">
+          <div>
+            <label class="form-label-sub" for="log-waist">Waist (cm)</label>
+            <input type="number" id="log-waist" class="form-control" step="0.1" min="30" max="200" placeholder="e.g. 80">
+          </div>
+          <div>
+            <label class="form-label-sub" for="log-hip">Hip (cm)</label>
+            <input type="number" id="log-hip" class="form-control" step="0.1" min="30" max="200" placeholder="e.g. 95">
+          </div>
+          <div>
+            <label class="form-label-sub" for="log-neck">Neck (cm)</label>
+            <input type="number" id="log-neck" class="form-control" step="0.1" min="20" max="60" placeholder="e.g. 38">
+          </div>
+          <div>
+            <label class="form-label-sub" for="log-chest">Chest (cm)</label>
+            <input type="number" id="log-chest" class="form-control" step="0.1" min="40" max="200" placeholder="e.g. 100">
+          </div>
+          <div>
+            <label class="form-label-sub" for="log-arm">Arm (cm)</label>
+            <input type="number" id="log-arm" class="form-control" step="0.1" min="15" max="60" placeholder="e.g. 33">
+          </div>
+          <div>
+            <label class="form-label-sub" for="log-thigh">Thigh (cm)</label>
+            <input type="number" id="log-thigh" class="form-control" step="0.1" min="30" max="100" placeholder="e.g. 55">
+          </div>
+        </div>
       </div>
       <div class="dialog-footer">
         <button type="submit" class="btn-primary">Save Entry</button>

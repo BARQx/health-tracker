@@ -528,6 +528,80 @@ export function calculateGoalForecast(latestWeight, targetWeight, weeklyRate, la
 }
 
 /**
+ * Waist-to-Hip Ratio (WHR)
+ * WHO risk thresholds: Male ≥ 0.90 = elevated, Female ≥ 0.85 = elevated
+ * @param {number} waistCm
+ * @param {number} hipCm
+ * @returns {number}
+ */
+export function waistToHipRatio(waistCm, hipCm) {
+  if (!waistCm || !hipCm || hipCm <= 0) return 0;
+  return waistCm / hipCm;
+}
+
+/**
+ * Waist-to-Height Ratio (WHtR)
+ * Universal boundary value: < 0.5 is healthy regardless of sex or age.
+ * @param {number} waistCm
+ * @param {number} heightCm
+ * @returns {number}
+ */
+export function waistToHeightRatio(waistCm, heightCm) {
+  if (!waistCm || !heightCm || heightCm <= 0) return 0;
+  return waistCm / heightCm;
+}
+
+/**
+ * US Navy Body Fat % Estimator (circumference-based)
+ * Uses tape measurements instead of calipers or DEXA.
+ * @param {number} waistCm
+ * @param {number} neckCm
+ * @param {number} hipCm - Required for females only
+ * @param {number} heightCm
+ * @param {'male'|'female'} sex
+ * @returns {number}
+ */
+export function navyBodyFat(waistCm, neckCm, hipCm, heightCm, sex) {
+  if (!waistCm || !neckCm || !heightCm || waistCm <= neckCm) return 0;
+  if (sex === 'female') {
+    if (!hipCm) return 0;
+    const d = waistCm + hipCm - neckCm;
+    if (d <= 0) return 0;
+    return 495 / (1.29579 - 0.35004 * Math.log10(d) + 0.22100 * Math.log10(heightCm)) - 450;
+  }
+  const d = waistCm - neckCm;
+  if (d <= 0) return 0;
+  return 495 / (1.0324 - 0.19077 * Math.log10(d) + 0.15456 * Math.log10(heightCm)) - 450;
+}
+
+/**
+ * Classifies Waist-to-Hip Ratio risk level per WHO guidelines.
+ * @param {number} whr
+ * @param {'male'|'female'} sex
+ * @returns {{ category: string, badgeClass: string }}
+ */
+export function getWhrCategory(whr, sex) {
+  if (!whr || whr <= 0) return { category: '--', badgeClass: 'badge-normal' };
+  const threshold = sex === 'female' ? 0.85 : 0.90;
+  if (whr < threshold) return { category: 'Low Risk', badgeClass: 'badge-normal' };
+  if (whr < threshold + 0.05) return { category: 'Moderate', badgeClass: 'badge-overweight' };
+  return { category: 'Elevated', badgeClass: 'badge-obese' };
+}
+
+/**
+ * Classifies Waist-to-Height Ratio risk level.
+ * @param {number} whtr
+ * @returns {{ category: string, badgeClass: string }}
+ */
+export function getWhtrCategory(whtr) {
+  if (!whtr || whtr <= 0) return { category: '--', badgeClass: 'badge-normal' };
+  if (whtr < 0.43) return { category: 'Underweight', badgeClass: 'badge-underweight' };
+  if (whtr < 0.53) return { category: 'Healthy', badgeClass: 'badge-normal' };
+  if (whtr < 0.58) return { category: 'Overweight', badgeClass: 'badge-overweight' };
+  return { category: 'Obese', badgeClass: 'badge-obese' };
+}
+
+/**
  * Sanitizes, validates, and defensively normalizes historical weight records.
  * Strips corrupted or missing values, coerces numeric weights, and sorts chronologically.
  * @param {Array<any>} list
