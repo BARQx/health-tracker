@@ -1,23 +1,25 @@
 /* --- HealthTracker: Mobile-First Theme-Aware Stylesheet --- */
 
 :root {
+  color-scheme: dark;
   --color-bg: #0f172a;
   --color-surface: #1e293b;
   --color-surface-hover: #334155;
   --color-card-bg: #1e293b;
-  --color-border: #334155;
-  --color-border-subtle: #273549;
+  --color-border: #475569;
+  --color-border-subtle: #334155;
   --color-text-primary: #f8fafc;
-  --color-text-secondary: #cbd5e1;
+  --color-text-secondary: #e2e8f0;
   --color-text-muted: #94a3b8;
+  --color-placeholder: #94a3b8;
   --color-primary: #3b82f6;
   --color-primary-hover: #2563eb;
-  --color-primary-fade: rgba(59, 130, 246, 0.15);
+  --color-primary-fade: rgba(59, 130, 246, 0.2);
   --color-trend: #10b981;
   --color-target: #f59e0b;
   --color-danger: #ef4444;
-  --color-danger-fade: rgba(239, 68, 68, 0.15);
-  --color-input-bg: #0f172a;
+  --color-danger-fade: rgba(239, 68, 68, 0.2);
+  --color-input-bg: #0b1120;
   
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -33,23 +35,25 @@
 }
 
 [data-theme="light"] {
+  color-scheme: light;
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-surface-hover: #f1f5f9;
   --color-card-bg: #ffffff;
-  --color-border: #e2e8f0;
-  --color-border-subtle: #f1f5f9;
+  --color-border: #cbd5e1;
+  --color-border-subtle: #e2e8f0;
   --color-text-primary: #0f172a;
   --color-text-secondary: #334155;
   --color-text-muted: #64748b;
+  --color-placeholder: #94a3b8;
   --color-primary: #2563eb;
   --color-primary-hover: #1d4ed8;
-  --color-primary-fade: rgba(37, 99, 235, 0.1);
+  --color-primary-fade: rgba(37, 99, 235, 0.12);
   --color-trend: #059669;
   --color-target: #d97706;
   --color-danger: #dc2626;
   --color-danger-fade: rgba(220, 38, 38, 0.1);
-  --color-input-bg: #f8fafc;
+  --color-input-bg: #ffffff;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.12);
@@ -586,15 +590,82 @@ dialog::backdrop {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
+  color-scheme: inherit;
   font-family: inherit;
   font-size: 0.95rem;
   outline: none;
   transition: var(--transition);
 }
 
+.form-control::placeholder {
+  color: var(--color-placeholder);
+  opacity: 1;
+}
+
+.form-control::-webkit-input-placeholder {
+  color: var(--color-placeholder);
+  opacity: 1;
+}
+
+.form-control::-moz-placeholder {
+  color: var(--color-placeholder);
+  opacity: 1;
+}
+
 .form-control:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px var(--color-primary-fade);
+  box-shadow: 0 0 0 3px var(--color-primary-fade);
+}
+
+/* Date picker calendar indicator */
+input[type="date"].form-control::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(0.9) brightness(1.2);
+  opacity: 0.85;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background: var(--color-surface-hover);
+}
+
+[data-theme="light"] input[type="date"].form-control::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.65;
+}
+
+/* Dropdown select options */
+select.form-control option {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+/* Tag chips */
+.tag-chip {
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.tag-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
+}
+
+.tag-chip.active {
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  color: #ffffff !important;
+  font-weight: 600;
 }
 
 .dialog-footer {
