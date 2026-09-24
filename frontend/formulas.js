@@ -304,6 +304,54 @@ export function calculatePaceAndProgress(records) {
 }
 
 /**
+ * Enriches historical records with deltas (weight, BMI, body fat) and elapsed time from previous weigh-in.
+ * Retains historical deltas even when the list is subsequently timeframe-filtered.
+ * @param {Array<{ date: string, weight: number }>} records
+ * @param {number} [heightCm=170]
+ * @param {number} [age=30]
+ * @param {'male'|'female'} [sex='male']
+ * @returns {Array<object>}
+ */
+export function enrichRecordsWithDeltas(records, heightCm = 170, age = 30, sex = 'male') {
+  if (!Array.isArray(records) || records.length === 0) return [];
+
+  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+
+  return sorted.map((entry, idx) => {
+    const prev = idx > 0 ? sorted[idx - 1] : null;
+    const bmi = standardBmi(entry.weight, heightCm);
+    const bodyFat = deurenbergBodyFat(bmi, age, sex);
+
+    let deltaWeight = null;
+    let deltaBmi = null;
+    let deltaBodyFat = null;
+    let daysSincePrev = null;
+
+    if (prev) {
+      deltaWeight = Number((entry.weight - prev.weight).toFixed(2));
+      const prevBmi = standardBmi(prev.weight, heightCm);
+      const prevBodyFat = deurenbergBodyFat(prevBmi, age, sex);
+      deltaBmi = Number((bmi - prevBmi).toFixed(2));
+      deltaBodyFat = Number((bodyFat - prevBodyFat).toFixed(1));
+
+      const d1 = new Date(prev.date);
+      const d2 = new Date(entry.date);
+      daysSincePrev = Math.max(1, Math.round((d2 - d1) / 86400000));
+    }
+
+    return {
+      ...entry,
+      bmi,
+      bodyFat,
+      deltaWeight,
+      deltaBmi,
+      deltaBodyFat,
+      daysSincePrev
+    };
+  });
+}
+
+/**
  * Time-Aware Weight Trend Smoothing.
  * Accounts for real elapsed days between check-ins.
  * @param {Array<{ date: string, weight: number }>} records
@@ -323,8 +371,6 @@ export function calculateTrendWeights(records, dailyAlpha = 0.1) {
       const prevDate = new Date(sorted[index - 1].date);
       const currDate = new Date(entry.date);
       const days = Math.max(1, Math.round((currDate - prevDate) / 86400000));
-      // Effective alpha across elapsed days: 1 - (1 - alpha)^days
-      // If gap is long (e.g. multi-week or multi-month), effectiveAlpha approaches 1.0
       const effectiveAlpha = Math.min(1, 1 - Math.pow(1 - dailyAlpha, days));
       currentTrend = (entry.weight * effectiveAlpha) + (currentTrend * (1 - effectiveAlpha));
     }

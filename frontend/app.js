@@ -15,7 +15,8 @@ import {
   revisedHarrisBenedictBmr,
   calculateTdee,
   calculateTrendWeights,
-  calculatePaceAndProgress
+  calculatePaceAndProgress,
+  enrichRecordsWithDeltas
 } from './formulas.js';
 
 // --- State Management ---
@@ -456,25 +457,12 @@ function updateChart() {
     return;
   }
 
-  const smoothed = calculateTrendWeights(records);
   const heightCm = state.profile?.heightCm || 170;
   const age = state.profile?.birthDate ? calculateAge(state.profile.birthDate) : 30;
   const sex = state.profile?.sex || 'male';
 
-  // Enrich with BMI and Body Fat %
-  const enriched = smoothed.map(r => {
-    const bmi = standardBmi(r.weight, heightCm);
-    const bmiTrend = standardBmi(r.trendWeight, heightCm);
-    const bodyFat = deurenbergBodyFat(bmi, age, sex);
-    const bodyFatTrend = deurenbergBodyFat(bmiTrend, age, sex);
-    return {
-      ...r,
-      bmi,
-      bmiTrend,
-      bodyFat,
-      bodyFatTrend
-    };
-  });
+  // Compute exact point-to-point deltas and metrics across full historical records
+  const enriched = enrichRecordsWithDeltas(records, heightCm, age, sex);
 
   // Filter by timeframe
   let filtered = enriched;

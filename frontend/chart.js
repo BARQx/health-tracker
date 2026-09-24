@@ -1,7 +1,9 @@
 /**
  * Interactive Canvas Chart Engine
- * High-performance, touch-friendly, zero-dependency responsive charting for weight & health trends.
+ * High-performance, touch-friendly, zero-dependency responsive charting for weight, body fat & BMI trends.
  */
+
+import { getBmiCategory } from './formulas.js';
 
 export class HealthChart {
   constructor(canvasElement, options = {}) {
@@ -59,9 +61,8 @@ export class HealthChart {
       let minDistance = Infinity;
 
       for (const pt of this.renderedPoints || []) {
-        const dist = Math.hypot(pt.x - x, pt.y - y);
         const xDist = Math.abs(pt.x - x);
-        if (xDist < minDistance && xDist < 40) {
+        if (xDist < minDistance && xDist < 45) {
           minDistance = xDist;
           closest = pt;
         }
@@ -82,21 +83,34 @@ export class HealthChart {
 
     this.canvas.addEventListener('mousemove', handleMove);
     this.canvas.addEventListener('mouseleave', handleLeave);
+    this.canvas.addEventListener('touchstart', handleMove, { passive: true });
     this.canvas.addEventListener('touchmove', handleMove, { passive: true });
     this.canvas.addEventListener('touchend', handleLeave);
   }
 
   getThemeColors() {
     const style = getComputedStyle(document.documentElement);
+    let accentColor = style.getPropertyValue('--color-primary').trim() || '#3b82f6';
+    let accentFade = style.getPropertyValue('--color-primary-fade').trim() || 'rgba(59, 130, 246, 0.15)';
+
+    if (this.mode === 'fat') {
+      accentColor = '#10b981'; // Emerald
+      accentFade = 'rgba(16, 185, 129, 0.18)';
+    } else if (this.mode === 'bmi') {
+      accentColor = '#8b5cf6'; // Purple / Violet
+      accentFade = 'rgba(139, 92, 246, 0.18)';
+    }
+
     return {
-      primary: style.getPropertyValue('--color-primary').trim() || '#3b82f6',
-      primaryFade: style.getPropertyValue('--color-primary-fade').trim() || 'rgba(59, 130, 246, 0.12)',
+      accent: accentColor,
+      accentFade: accentFade,
       trend: style.getPropertyValue('--color-trend').trim() || '#10b981',
       target: style.getPropertyValue('--color-target').trim() || '#f59e0b',
+      danger: style.getPropertyValue('--color-danger').trim() || '#ef4444',
       border: style.getPropertyValue('--color-border').trim() || '#334155',
       textMuted: style.getPropertyValue('--color-text-muted').trim() || '#94a3b8',
       textPrimary: style.getPropertyValue('--color-text-primary').trim() || '#f8fafc',
-      cardBg: style.getPropertyValue('--color-card-bg').trim() || '#1e293b'
+      cardBg: style.getPropertyValue('--color-card-bg').trim() || '#141417'
     };
   }
 
@@ -113,29 +127,39 @@ export class HealthChart {
       ctx.font = '14px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('No weight entries in this timeframe. Tap "+ Log Weight" to start.', width / 2, height / 2);
+      ctx.fillText('No entries in this timeframe. Tap "+ Log Weight" to record a check-in.', width / 2, height / 2);
       return;
     }
 
-    const padding = { top: 25, right: 35, bottom: 40, left: 45 };
+    const padding = { top: 28, right: 35, bottom: 42, left: 45 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
     // Extract values based on active mode
     const items = this.data.map(d => {
       let val = d.weight;
-      let trendVal = d.trendWeight;
+      let delta = d.deltaWeight !== undefined ? d.deltaWeight : null;
+      let unit = 'kg';
+
       if (this.mode === 'fat') {
         val = d.bodyFat || 0;
-        trendVal = d.bodyFatTrend || val;
+        delta = d.deltaBodyFat !== undefined ? d.deltaBodyFat : null;
+        unit = '%';
       } else if (this.mode === 'bmi') {
         val = d.bmi || 0;
-        trendVal = d.bmiTrend || val;
+        delta = d.deltaBmi !== undefined ? d.deltaBmi : null;
+        unit = '';
       }
-      return { ...d, plotValue: val, plotTrend: trendVal };
+
+      return {
+        ...d,
+        plotValue: val,
+        deltaValue: delta,
+        unit
+      };
     });
 
-    let allValues = items.map(d => d.plotValue).concat(items.map(d => d.plotTrend));
+    let allValues = items.map(d => d.plotValue);
     if (this.mode === 'weight' && this.targetWeight) {
       allValues.push(this.targetWeight);
     }
@@ -145,7 +169,7 @@ export class HealthChart {
 
     // Provide breathing room
     const range = maxVal - minVal || 2;
-    minVal = Math.floor(minVal - range * 0.15);
+    minVal = Math.max(0, Math.floor(minVal - range * 0.15));
     maxVal = Math.ceil(maxVal + range * 0.15);
 
     const getX = (index) => {
@@ -154,6 +178,7 @@ export class HealthChart {
     };
 
     const getY = (val) => {
+      if (maxVal === minVal) return padding.top + chartHeight / 2;
       return padding.top + chartHeight - ((val - minVal) / (maxVal - minVal)) * chartHeight;
     };
 
@@ -176,8 +201,8 @@ export class HealthChart {
       ctx.lineTo(width - padding.right, y);
       ctx.stroke();
 
-      const unit = this.mode === 'weight' ? 'kg' : (this.mode === 'fat' ? '%' : '');
-      ctx.fillText(`${tickVal.toFixed(1)}${unit}`, padding.left - 8, y);
+      const unitLabel = this.mode === 'weight' ? 'kg' : (this.mode === 'fat' ? '%' : '');
+      ctx.fillText(`${tickVal.toFixed(1)}${unitLabel}`, padding.left - 8, y);
     }
     ctx.setLineDash([]); // Reset line dash
 
@@ -195,58 +220,69 @@ export class HealthChart {
 
       ctx.fillStyle = colors.target;
       ctx.textAlign = 'left';
-      ctx.fillText(`Target: ${this.targetWeight}kg`, width - padding.right - 70, targetY - 8);
+      ctx.fillText(`Target: ${this.targetWeight}kg`, width - padding.right - 80, targetY - 8);
     }
 
     // Map screen coordinates
     const points = items.map((item, idx) => ({
       ...item,
       x: getX(idx),
-      y: getY(item.plotValue),
-      trendY: getY(item.plotTrend)
+      y: getY(item.plotValue)
     }));
     this.renderedPoints = points;
 
-    // 3. Draw Trend Line (Smoothed Spline)
+    // 3. Draw Single Clean Data Area and Line
     if (points.length > 1) {
+      // Subtle gradient fill under curve
+      const grad = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
+      grad.addColorStop(0, colors.accentFade);
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
       ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].trendY);
-
-      for (let i = 0; i < points.length - 1; i++) {
-        const p0 = points[i];
-        const p1 = points[i + 1];
-        const cpX = (p0.x + p1.x) / 2;
-        ctx.bezierCurveTo(cpX, p0.trendY, cpX, p1.trendY, p1.x, p1.trendY);
+      ctx.moveTo(points[0].x, height - padding.bottom);
+      ctx.lineTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
       }
+      ctx.lineTo(points[points.length - 1].x, height - padding.bottom);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
 
-      ctx.strokeStyle = colors.trend;
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-    }
-
-    // 4. Draw Raw Entries Line and Dots
-    if (points.length > 1) {
+      // Sharp primary stroke line
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
       for (let i = 1; i < points.length; i++) {
         ctx.lineTo(points[i].x, points[i].y);
       }
-      ctx.strokeStyle = colors.primaryFade;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = colors.accent;
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
       ctx.stroke();
+    } else if (points.length === 1) {
+      // Single entry indicator guideline
+      ctx.beginPath();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = colors.accentFade;
+      ctx.moveTo(padding.left, points[0].y);
+      ctx.lineTo(width - padding.right, points[0].y);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
+    // 4. Draw Crisp Data Dots
     for (const pt of points) {
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = colors.primary;
+      ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = colors.accent;
       ctx.fill();
       ctx.strokeStyle = colors.cardBg;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
 
-    // 5. Draw X-Axis Date Labels (first, middle, last to avoid clutter on mobile)
+    // 5. Draw X-Axis Date Labels (First, Middle, Last for mobile polish)
     ctx.fillStyle = colors.textMuted;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -270,12 +306,12 @@ export class HealthChart {
       }
     }
 
-    // 6. Draw Tooltip for Active Hover/Touch Point
+    // 6. Draw High-Precision Dynamic Tooltip
     if (this.activePoint) {
       const pt = this.activePoint;
 
-      // Draw crosshair vertical line
-      ctx.strokeStyle = colors.primary;
+      // Draw crosshair vertical dashed line
+      ctx.strokeStyle = colors.accent;
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
@@ -284,65 +320,131 @@ export class HealthChart {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Highlight active point
+      // Highlight active point with halo
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = colors.primary;
+      ctx.arc(pt.x, pt.y, 7, 0, Math.PI * 2);
+      ctx.fillStyle = colors.accent;
       ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      // Tooltip Card
-      const tooltipText1 = `${pt.date}`;
-      const unit = this.mode === 'weight' ? 'kg' : (this.mode === 'fat' ? '%' : '');
-      const tooltipText2 = `Actual: ${pt.plotValue.toFixed(2)} ${unit}`;
-      const tooltipText3 = `Trend: ${pt.plotTrend.toFixed(2)} ${unit}`;
+      // Build structured tooltip lines
+      const lines = [];
 
-      ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
-      const textWidth = Math.max(
-        ctx.measureText(tooltipText1).width,
-        ctx.measureText(tooltipText2).width,
-        ctx.measureText(tooltipText3).width
-      ) + 20;
+      // Line 1: Date
+      lines.push({
+        text: pt.date,
+        color: colors.textMuted,
+        font: '11px system-ui, -apple-system, sans-serif'
+      });
 
-      const ttWidth = Math.max(120, textWidth);
-      const ttHeight = 62;
+      // Line 2: Main Metric Value
+      if (this.mode === 'weight') {
+        lines.push({
+          text: `Weight: ${pt.plotValue.toFixed(2)} kg`,
+          color: colors.textPrimary,
+          font: 'bold 13px system-ui, -apple-system, sans-serif'
+        });
+      } else if (this.mode === 'fat') {
+        lines.push({
+          text: `Body Fat: ${pt.plotValue.toFixed(1)}%`,
+          color: colors.textPrimary,
+          font: 'bold 13px system-ui, -apple-system, sans-serif'
+        });
+      } else if (this.mode === 'bmi') {
+        const cat = getBmiCategory(pt.plotValue);
+        lines.push({
+          text: `BMI: ${pt.plotValue.toFixed(1)} (${cat.category})`,
+          color: colors.textPrimary,
+          font: 'bold 13px system-ui, -apple-system, sans-serif'
+        });
+      }
+
+      // Line 3: Delta Change since previous weigh-in
+      if (pt.deltaValue !== null && pt.deltaValue !== undefined) {
+        const isLoss = pt.deltaValue < 0;
+        const sign = pt.deltaValue > 0 ? '+' : '';
+        const decimals = this.mode === 'weight' ? 2 : 1;
+        const unitSuffix = this.mode === 'weight' ? ' kg' : (this.mode === 'fat' ? '%' : '');
+        const changeColor = isLoss ? colors.trend : (pt.deltaValue === 0 ? colors.textMuted : colors.danger);
+        const daysText = pt.daysSincePrev ? ` (${pt.daysSincePrev}d)` : '';
+
+        lines.push({
+          text: `Change: ${sign}${pt.deltaValue.toFixed(decimals)}${unitSuffix}${daysText}`,
+          color: changeColor,
+          font: '11px system-ui, -apple-system, sans-serif'
+        });
+      } else {
+        lines.push({
+          text: 'Change: Initial check-in',
+          color: colors.textMuted,
+          font: '11px system-ui, -apple-system, sans-serif'
+        });
+      }
+
+      // Line 4: Target Progress (Weight mode only, if target is set)
+      if (this.mode === 'weight' && this.targetWeight) {
+        const diffToTarget = pt.plotValue - this.targetWeight;
+        if (diffToTarget > 0) {
+          lines.push({
+            text: `To Target: ${diffToTarget.toFixed(2)} kg`,
+            color: colors.target,
+            font: '11px system-ui, -apple-system, sans-serif'
+          });
+        } else {
+          lines.push({
+            text: `Goal Reached! 🎉`,
+            color: colors.trend,
+            font: '11px system-ui, -apple-system, sans-serif'
+          });
+        }
+      }
+
+      // Measure tooltip dimensions
+      const lineHeight = 19;
+      const padX = 12;
+      const padY = 8;
+      const ttHeight = padY * 2 + lines.length * lineHeight;
+
+      let maxTextWidth = 0;
+      for (const line of lines) {
+        ctx.font = line.font;
+        const w = ctx.measureText(line.text).width;
+        if (w > maxTextWidth) maxTextWidth = w;
+      }
+      const ttWidth = Math.max(135, maxTextWidth + padX * 2);
+
       let ttX = pt.x - ttWidth / 2;
       let ttY = pt.y - ttHeight - 12;
 
-      // Bounds checking
+      // Ensure tooltip remains inside canvas boundaries
       if (ttX < 10) ttX = 10;
       if (ttX + ttWidth > width - 10) ttX = width - ttWidth - 10;
-      if (ttY < 10) ttY = pt.y + 12;
+      if (ttY < 10) ttY = pt.y + 12; // Flip below if too close to top
 
-      // Background
+      // Draw Tooltip Container
       ctx.fillStyle = colors.cardBg;
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetY = 3;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 4;
       ctx.beginPath();
-      ctx.roundRect(ttX, ttY, ttWidth, ttHeight, 6);
+      ctx.roundRect(ttX, ttY, ttWidth, ttHeight, 8);
       ctx.fill();
       ctx.strokeStyle = colors.border;
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.shadowColor = 'transparent';
 
-      // Text
+      // Render Text Lines
       ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = colors.textMuted;
-      ctx.font = '11px system-ui, -apple-system, sans-serif';
-      ctx.fillText(tooltipText1, ttX + 10, ttY + 8);
-
-      ctx.fillStyle = colors.textPrimary;
-      ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
-      ctx.fillText(tooltipText2, ttX + 10, ttY + 24);
-
-      ctx.fillStyle = colors.trend;
-      ctx.font = '11px system-ui, -apple-system, sans-serif';
-      ctx.fillText(tooltipText3, ttX + 10, ttY + 42);
+      ctx.textBaseline = 'middle';
+      lines.forEach((l, idx) => {
+        ctx.fillStyle = l.color;
+        ctx.font = l.font;
+        const textY = ttY + padY + idx * lineHeight + lineHeight / 2;
+        ctx.fillText(l.text, ttX + padX, textY);
+      });
     }
   }
 }

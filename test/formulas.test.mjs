@@ -15,7 +15,8 @@ import {
   revisedHarrisBenedictBmr,
   calculateTdee,
   calculateTrendWeights,
-  calculatePaceAndProgress
+  calculatePaceAndProgress,
+  enrichRecordsWithDeltas
 } from '../frontend/formulas.js';
 
 test('calculateAge calculates exact completed years correctly', () => {
@@ -169,3 +170,26 @@ test('calculatePaceAndProgress calculates weekly rate and net change accurately'
   assert.equal(pace.weeklyRate, -0.40);
   assert.equal(pace.totalChange, -2.00);
 });
+
+test('enrichRecordsWithDeltas computes exact point-to-point deltas for weight, BMI, and body fat', () => {
+  const records = [
+    { date: '2026-08-20', weight: 67.34 },
+    { date: '2026-09-24', weight: 64.85 }
+  ];
+  const enriched = enrichRecordsWithDeltas(records, 175, 30, 'male');
+  assert.equal(enriched.length, 2);
+
+  // First record has null deltas
+  assert.equal(enriched[0].deltaWeight, null);
+  assert.equal(enriched[0].deltaBmi, null);
+  assert.equal(enriched[0].deltaBodyFat, null);
+  assert.equal(enriched[0].daysSincePrev, null);
+
+  // Second record has exact deltas
+  assert.equal(enriched[1].deltaWeight, -2.49);
+  assert.equal(enriched[1].daysSincePrev, 35);
+  assert.ok(enriched[1].deltaBmi < 0, 'BMI decreased');
+  assert.ok(enriched[1].deltaBodyFat < 0, 'Body fat decreased');
+  assert.equal(enriched[1].deltaBmi, -0.81);
+});
+
