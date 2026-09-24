@@ -1,0 +1,23 @@
+{
+  "name": "health-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted, mobile-friendly weight & body composition tracker with multi-formula analysis and Neon Postgres backend",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "db:migrate": "node scripts/migrate.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/formulas.test.mjs test/build.test.mjs"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "dotenv": "^16.6.1"
+  },
+  "devDependencies": {
+    "clean-css": "^5.3.3"
+  }
+}

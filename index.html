@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <title>HealthTracker · Weight & Body Composition</title>
+  <meta name="description" content="Self-hosted personal weight & body composition tracker with multi-formula analysis">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="frontend/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚖️</text></svg>">
+</head>
+<body>
+
+  <!-- Top App Navigation Bar -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <span class="brand-icon">⚖️</span>
+        <span>HealthTracker</span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-export-csv" class="btn-icon" title="Export CSV">📄</button>
+        <button id="btn-export-json" class="btn-icon" title="Backup JSON">💾</button>
+        <button id="btn-toggle-theme" class="btn-icon" title="Toggle Theme" aria-label="Toggle Theme">
+          <span id="theme-toggle-icon">🌙</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+
+    <!-- Profile Summary Card -->
+    <section class="profile-card">
+      <div class="profile-info">
+        <div id="display-avatar" class="profile-avatar">?</div>
+        <div class="profile-details">
+          <h2 id="display-name">Loading profile...</h2>
+          <div id="display-meta" class="profile-meta">Please wait</div>
+        </div>
+      </div>
+      <button id="btn-edit-profile" class="btn-link">Edit Profile</button>
+    </section>
+
+    <!-- Hero Stats Cards -->
+    <section class="hero-stats-grid">
+      <div class="stat-card">
+        <div class="stat-header">
+          <span>Latest Weight</span>
+          <span>⚖️</span>
+        </div>
+        <div id="stat-current-weight" class="stat-value">-- <small>kg</small></div>
+        <div id="stat-weight-delta" class="stat-subtext">No records yet</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span>Trend (Smoothed)</span>
+          <span>📈</span>
+        </div>
+        <div id="stat-trend-weight" class="stat-value">-- <small>kg</small></div>
+        <div class="stat-subtext">Exponential Moving Avg</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span>Target Progress</span>
+          <span>🎯</span>
+        </div>
+        <div id="stat-target-diff" class="stat-value">--</div>
+        <div class="stat-subtext">Goal Weight Tracking</div>
+      </div>
+    </section>
+
+    <!-- Interactive Canvas Chart Section -->
+    <section class="chart-card">
+      <div class="chart-controls">
+        <div class="pill-group">
+          <button class="pill-btn metric-btn active" data-metric="weight">Weight & Trend</button>
+          <button class="pill-btn metric-btn" data-metric="fat">Body Fat %</button>
+          <button class="pill-btn metric-btn" data-metric="bmi">BMI Curve</button>
+        </div>
+        <div class="pill-group">
+          <button class="pill-btn timeframe-btn" data-timeframe="7d">7D</button>
+          <button class="pill-btn timeframe-btn active" data-timeframe="30d">30D</button>
+          <button class="pill-btn timeframe-btn" data-timeframe="90d">90D</button>
+          <button class="pill-btn timeframe-btn" data-timeframe="1y">1Y</button>
+          <button class="pill-btn timeframe-btn" data-timeframe="all">All</button>
+        </div>
+      </div>
+
+      <div class="canvas-wrapper">
+        <canvas id="trend-canvas"></canvas>
+      </div>
+    </section>
+
+    <!-- Multi-Formula Breakdown Section -->
+    <section>
+      <h2 class="section-title">📊 Multi-Formula Health Analysis</h2>
+      <div id="formula-cards-container" class="formula-grid" style="margin-top: 0.75rem;">
+        <!-- Dynamically rendered by app.js -->
+      </div>
+    </section>
+
+    <!-- Historical Log Entries -->
+    <section class="history-card">
+      <div class="history-header">
+        <h2 class="section-title">📅 Log History</h2>
+      </div>
+      <div id="history-list-container" class="history-list">
+        <!-- Dynamically rendered by app.js -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Sticky Mobile Action Button -->
+  <div class="mobile-fab-container">
+    <button id="btn-open-log-modal" class="btn-primary-action">
+      <span>➕</span>
+      <span>Log Weight</span>
+    </button>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Modal: Log / Edit Weight Entry -->
+  <dialog id="log-dialog">
+    <div class="dialog-header">
+      <h3>Log Weight Record</h3>
+      <button type="button" id="btn-close-log" class="btn-icon" aria-label="Close dialog">✕</button>
+    </div>
+    <form id="log-form">
+      <div class="form-group">
+        <label class="form-label" for="log-date">Date</label>
+        <input type="date" id="log-date" class="form-control" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="log-weight">Weight (kg)</label>
+        <input type="number" id="log-weight" class="form-control" step="0.01" min="20" max="500" placeholder="e.g. 67.50" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Context Tags</label>
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+          <button type="button" class="tag-chip pill-btn" data-tag="Morning" style="border: 1px solid var(--color-border);">🌅 Morning</button>
+          <button type="button" class="tag-chip pill-btn" data-tag="Fasting" style="border: 1px solid var(--color-border);">💧 Fasting</button>
+          <button type="button" class="tag-chip pill-btn" data-tag="Post-workout" style="border: 1px solid var(--color-border);">🏋️ Post-workout</button>
+          <button type="button" class="tag-chip pill-btn" data-tag="High Sodium" style="border: 1px solid var(--color-border);">🧂 High Sodium</button>
+          <button type="button" class="tag-chip pill-btn" data-tag="Evening" style="border: 1px solid var(--color-border);">🌙 Evening</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="log-notes">Notes (optional)</label>
+        <input type="text" id="log-notes" class="form-control" placeholder="e.g. Felt well rested, hydrated">
+      </div>
+      <div class="dialog-footer">
+        <button type="submit" class="btn-primary">Save Entry</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal: Edit Profile -->
+  <dialog id="profile-dialog">
+    <div class="dialog-header">
+      <h3>Profile Details</h3>
+      <button type="button" id="btn-close-profile" class="btn-icon" aria-label="Close dialog">✕</button>
+    </div>
+    <form id="profile-form">
+      <div class="form-group">
+        <label class="form-label" for="profile-name">Name</label>
+        <input type="text" id="profile-name" class="form-control" placeholder="Your Name" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="profile-birthdate">Date of Birth</label>
+        <input type="date" id="profile-birthdate" class="form-control" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="profile-sex">Sex / Gender</label>
+        <select id="profile-sex" class="form-control" required>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="profile-height">Height (cm)</label>
+        <input type="number" id="profile-height" class="form-control" step="0.1" min="30" max="300" placeholder="e.g. 175" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="profile-target-weight">Target Weight (kg, optional)</label>
+        <input type="number" id="profile-target-weight" class="form-control" step="0.1" min="20" max="500" placeholder="e.g. 65.0">
+      </div>
+      <div class="dialog-footer">
+        <button type="submit" class="btn-primary">Save Profile</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal: Password Gate Unlock -->
+  <dialog id="auth-dialog">
+    <div class="dialog-header">
+      <h3>🔒 Unlock HealthTracker</h3>
+    </div>
+    <form id="auth-form">
+      <p style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 1rem;">
+        Enter your access password to unlock and sync your health records.
+      </p>
+      <div class="form-group">
+        <label class="form-label" for="auth-password">Access Password</label>
+        <input type="password" id="auth-password" class="form-control" required autofocus>
+      </div>
+      <div class="dialog-footer">
+        <button type="submit" class="btn-primary">Unlock Dashboard</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="frontend/app.js"></script>
+</body>
+</html>
