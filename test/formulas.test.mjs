@@ -169,6 +169,32 @@ test('calculatePaceAndProgress calculates weekly rate and net change accurately'
   assert.equal(pace.daysElapsed, 35);
   assert.equal(pace.weeklyRate, -0.40);
   assert.equal(pace.totalChange, -2.00);
+  assert.equal(pace.timeframeChange, -2.00);
+  assert.equal(pace.timeframeLabel, 'All-Time');
+
+  // Test multi-year scenario where user has old 2021 logs and active 2026 logs
+  const multiYearRecords = [
+    { date: '2021-07-03', weight: 68.10 },
+    { date: '2026-01-01', weight: 71.90 },
+    { date: '2026-08-20', weight: 66.85 },
+    { date: '2026-09-24', weight: 64.85 }
+  ];
+  const now = new Date('2026-09-24T12:00:00Z');
+
+  // 1Y view: Compares within 365 days (71.90 -> 64.85 = -7.05 kg)
+  const pace1Y = calculatePaceAndProgress(multiYearRecords, '1y', now);
+  assert.equal(pace1Y.timeframeLabel, '1Y Change');
+  assert.equal(pace1Y.timeframeChange, -7.05);
+
+  // 30D view: Compares to prior check-in (66.85 -> 64.85 = -2.00 kg)
+  const pace30D = calculatePaceAndProgress(multiYearRecords, '30d', now);
+  assert.equal(pace30D.timeframeLabel, '30D Change');
+  assert.equal(pace30D.timeframeChange, -2.00);
+
+  // All-time view: Compares against 2021 (68.10 -> 64.85 = -3.25 kg)
+  const paceAll = calculatePaceAndProgress(multiYearRecords, 'all', now);
+  assert.equal(paceAll.timeframeLabel, 'All-Time');
+  assert.equal(paceAll.timeframeChange, -3.25);
 });
 
 test('enrichRecordsWithDeltas computes exact point-to-point deltas for weight, BMI, and body fat', () => {

@@ -115,6 +115,7 @@ function initEventHandlers() {
       e.target.classList.add('active');
       state.timeframe = e.target.dataset.timeframe;
       updateChart();
+      renderHeroStats();
     });
   });
 
@@ -381,7 +382,7 @@ function renderHeroStats() {
     return;
   }
 
-  const pace = calculatePaceAndProgress(records);
+  const pace = calculatePaceAndProgress(records, state.timeframe);
 
   // Card 1: Latest Weight
   if (currentWeightEl) {
@@ -415,10 +416,10 @@ function renderHeroStats() {
   }
 
   if (totalProgressEl) {
-    const isLoss = pace.totalChange <= 0;
-    const sign = pace.totalChange > 0 ? '+' : '';
+    const isLoss = pace.timeframeChange <= 0;
+    const sign = pace.timeframeChange > 0 ? '+' : '';
     const colorClass = isLoss ? 'delta-negative' : 'delta-positive';
-    totalProgressEl.innerHTML = `Total: <strong class="${colorClass}">${sign}${pace.totalChange.toFixed(2)} kg</strong>`;
+    totalProgressEl.innerHTML = `${pace.timeframeLabel}: <strong class="${colorClass}">${sign}${pace.timeframeChange.toFixed(2)} kg</strong>`;
   }
 
   // Card 3: Target Progress

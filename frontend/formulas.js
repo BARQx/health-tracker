@@ -249,9 +249,10 @@ export function calculateTdee(bmr) {
 }
 
 /**
- * Calculates normalized weekly pace and total progress across check-ins.
- * Tailored for weekly, bi-weekly, or monthly weigh-ins.
- * @param {Array<{ date: string, weight: number }>} records - Sorted chronologically ascending
+ * Calculates current weekly pace (normalized to 7 days) and timeframe-aware net progress.
+ * @param {Array<{ date: string, weight: number }>} records
+ * @param {string} [timeframe='all'] - '7d' | '30d' | '90d' | '1y' | 'all'
+ * @param {Date} [now=new Date()]
  * @returns {{
  *   latestWeight: number,
  *   previousWeight: number|null,
@@ -259,12 +260,24 @@ export function calculateTdee(bmr) {
  *   diff: number,
  *   weeklyRate: number,
  *   totalChange: number,
+ *   timeframeChange: number,
+ *   timeframeLabel: string,
  *   startWeight: number
  * }}
  */
-export function calculatePaceAndProgress(records) {
+export function calculatePaceAndProgress(records, timeframe = 'all', now = new Date()) {
   if (!Array.isArray(records) || records.length === 0) {
-    return { latestWeight: 0, previousWeight: null, daysElapsed: 0, diff: 0, weeklyRate: 0, totalChange: 0, startWeight: 0 };
+    return {
+      latestWeight: 0,
+      previousWeight: null,
+      daysElapsed: 0,
+      diff: 0,
+      weeklyRate: 0,
+      totalChange: 0,
+      timeframeChange: 0,
+      timeframeLabel: 'Total',
+      startWeight: 0
+    };
   }
 
   const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
@@ -274,6 +287,38 @@ export function calculatePaceAndProgress(records) {
 
   const totalChange = Number((latest.weight - first.weight).toFixed(2));
 
+  // Determine timeframe window
+  let windowRecords = sorted;
+  let timeframeLabel = 'All-Time';
+
+  if (timeframe === '7d') {
+    timeframeLabel = '7D Change';
+    const cut = new Date(now.getTime() - 7 * 86400000);
+    windowRecords = sorted.filter(r => new Date(r.date) >= cut);
+  } else if (timeframe === '30d') {
+    timeframeLabel = '30D Change';
+    const cut = new Date(now.getTime() - 30 * 86400000);
+    windowRecords = sorted.filter(r => new Date(r.date) >= cut);
+  } else if (timeframe === '90d') {
+    timeframeLabel = '90D Change';
+    const cut = new Date(now.getTime() - 90 * 86400000);
+    windowRecords = sorted.filter(r => new Date(r.date) >= cut);
+  } else if (timeframe === '1y') {
+    timeframeLabel = '1Y Change';
+    const cut = new Date(now.getTime() - 365 * 86400000);
+    windowRecords = sorted.filter(r => new Date(r.date) >= cut);
+  }
+
+  let timeframeChange = totalChange;
+  if (windowRecords.length >= 2) {
+    timeframeChange = Number((latest.weight - windowRecords[0].weight).toFixed(2));
+  } else if (windowRecords.length === 1 && previous) {
+    // If only one record in the window, fallback to change since prior check-in
+    timeframeChange = Number((latest.weight - previous.weight).toFixed(2));
+  } else if (windowRecords.length === 0 && previous) {
+    timeframeChange = Number((latest.weight - previous.weight).toFixed(2));
+  }
+
   if (!previous) {
     return {
       latestWeight: latest.weight,
@@ -282,6 +327,8 @@ export function calculatePaceAndProgress(records) {
       diff: 0,
       weeklyRate: 0,
       totalChange,
+      timeframeChange,
+      timeframeLabel,
       startWeight: first.weight
     };
   }
@@ -299,6 +346,8 @@ export function calculatePaceAndProgress(records) {
     diff,
     weeklyRate,
     totalChange,
+    timeframeChange,
+    timeframeLabel,
     startWeight: first.weight
   };
 }
