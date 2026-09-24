@@ -14,7 +14,8 @@ import {
   mifflinStJeorBmr,
   revisedHarrisBenedictBmr,
   calculateTdee,
-  calculateTrendWeights
+  calculateTrendWeights,
+  calculatePaceAndProgress
 } from './formulas.js';
 
 // --- State Management ---
@@ -364,46 +365,84 @@ function renderHeroStats() {
   const targetWeight = state.profile?.targetWeightKg;
   const currentWeightEl = document.getElementById('stat-current-weight');
   const deltaEl = document.getElementById('stat-weight-delta');
-  const trendEl = document.getElementById('stat-trend-weight');
+  const paceEl = document.getElementById('stat-weekly-pace');
+  const totalProgressEl = document.getElementById('stat-total-progress');
   const targetEl = document.getElementById('stat-target-diff');
+  const targetSubEl = document.getElementById('stat-target-subtext');
 
   if (!records || records.length === 0) {
     if (currentWeightEl) currentWeightEl.innerHTML = '-- <small>kg</small>';
     if (deltaEl) deltaEl.textContent = 'No records logged yet';
-    if (trendEl) trendEl.textContent = '-- kg';
+    if (paceEl) paceEl.innerHTML = '-- <small>kg/wk</small>';
+    if (totalProgressEl) totalProgressEl.textContent = 'Overall change: --';
     if (targetEl) targetEl.textContent = targetWeight ? `Target: ${targetWeight.toFixed(2)} kg` : '--';
+    if (targetSubEl) targetSubEl.textContent = 'Goal Weight Tracking';
     return;
   }
 
-  const smoothed = calculateTrendWeights(records);
-  const latest = smoothed[smoothed.length - 1];
-  const previous = smoothed.length > 1 ? smoothed[smoothed.length - 2] : null;
+  const pace = calculatePaceAndProgress(records);
 
+  // Card 1: Latest Weight
   if (currentWeightEl) {
-    currentWeightEl.innerHTML = `${latest.weight.toFixed(2)} <small>kg</small>`;
+    currentWeightEl.innerHTML = `${pace.latestWeight.toFixed(2)} <small>kg</small>`;
   }
 
-  if (deltaEl && previous) {
-    const diff = latest.weight - previous.weight;
-    const sign = diff >= 0 ? '+' : '';
-    const className = diff <= 0 ? 'delta-negative' : 'delta-positive';
-    deltaEl.className = `stat-subtext ${className}`;
-    deltaEl.textContent = `${sign}${diff.toFixed(2)} kg vs previous entry`;
-  } else if (deltaEl) {
-    deltaEl.textContent = 'First logged entry';
+  if (deltaEl) {
+    if (pace.previousWeight !== null) {
+      const isLoss = pace.diff <= 0;
+      const arrow = isLoss ? '▼' : '▲';
+      const sign = pace.diff > 0 ? '+' : '';
+      const colorClass = isLoss ? 'delta-negative' : 'delta-positive';
+      deltaEl.className = `stat-subtext ${colorClass}`;
+      deltaEl.textContent = `${arrow} ${sign}${pace.diff.toFixed(2)} kg in ${pace.daysElapsed} days`;
+    } else {
+      deltaEl.className = 'stat-subtext';
+      deltaEl.textContent = 'First logged check-in';
+    }
   }
 
-  if (trendEl) {
-    trendEl.textContent = `${latest.trendWeight.toFixed(2)} kg`;
+  // Card 2: Weekly Pace (normalized to 7 days)
+  if (paceEl) {
+    if (pace.previousWeight !== null) {
+      const isLoss = pace.weeklyRate <= 0;
+      const sign = pace.weeklyRate > 0 ? '+' : '';
+      const colorClass = isLoss ? 'delta-negative' : 'delta-positive';
+      paceEl.innerHTML = `<span class="${colorClass}">${sign}${pace.weeklyRate.toFixed(2)}</span> <small>kg/wk</small>`;
+    } else {
+      paceEl.innerHTML = `0.00 <small>kg/wk</small>`;
+    }
   }
 
+  if (totalProgressEl) {
+    const isLoss = pace.totalChange <= 0;
+    const sign = pace.totalChange > 0 ? '+' : '';
+    const colorClass = isLoss ? 'delta-negative' : 'delta-positive';
+    totalProgressEl.innerHTML = `Total: <strong class="${colorClass}">${sign}${pace.totalChange.toFixed(2)} kg</strong>`;
+  }
+
+  // Card 3: Target Progress
   if (targetEl) {
     if (targetWeight) {
-      const diffToTarget = latest.weight - targetWeight;
-      const targetStr = diffToTarget > 0 ? `${diffToTarget.toFixed(2)} kg to goal` : `Goal reached! (+${Math.abs(diffToTarget).toFixed(2)} kg)`;
-      targetEl.textContent = targetStr;
+      const diffToTarget = pace.latestWeight - targetWeight;
+      if (diffToTarget > 0) {
+        targetEl.textContent = `${diffToTarget.toFixed(2)} kg to goal`;
+        if (targetSubEl) {
+          if (pace.weeklyRate < 0) {
+            const weeksNeeded = Math.ceil(diffToTarget / Math.abs(pace.weeklyRate));
+            targetSubEl.textContent = `~${weeksNeeded} weeks at current pace`;
+          } else {
+            targetSubEl.textContent = `Target: ${targetWeight.toFixed(2)} kg`;
+          }
+        }
+      } else {
+        targetEl.textContent = `Goal Reached! 🎉`;
+        if (targetSubEl) {
+          targetSubEl.textContent = `${Math.abs(diffToTarget).toFixed(2)} kg below target`;
+        }
+      }
     } else {
       targetEl.textContent = 'No goal set';
+      if (targetSubEl) targetSubEl.textContent = 'Set a target in profile';
     }
   }
 }

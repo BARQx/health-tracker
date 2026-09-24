@@ -249,21 +249,84 @@ export function calculateTdee(bmr) {
 }
 
 /**
- * Exponential Moving Average (EMA) Weight Trend Smoothing.
- * Filters out day-to-day hydration/sodium fluctuations (the Happy Scale / Hacker's Diet technique).
+ * Calculates normalized weekly pace and total progress across check-ins.
+ * Tailored for weekly, bi-weekly, or monthly weigh-ins.
  * @param {Array<{ date: string, weight: number }>} records - Sorted chronologically ascending
- * @param {number} [smoothingFactor=0.1] - Higher is more reactive, lower is smoother (0.1 standard)
+ * @returns {{
+ *   latestWeight: number,
+ *   previousWeight: number|null,
+ *   daysElapsed: number,
+ *   diff: number,
+ *   weeklyRate: number,
+ *   totalChange: number,
+ *   startWeight: number
+ * }}
+ */
+export function calculatePaceAndProgress(records) {
+  if (!Array.isArray(records) || records.length === 0) {
+    return { latestWeight: 0, previousWeight: null, daysElapsed: 0, diff: 0, weeklyRate: 0, totalChange: 0, startWeight: 0 };
+  }
+
+  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+  const latest = sorted[sorted.length - 1];
+  const first = sorted[0];
+  const previous = sorted.length > 1 ? sorted[sorted.length - 2] : null;
+
+  const totalChange = Number((latest.weight - first.weight).toFixed(2));
+
+  if (!previous) {
+    return {
+      latestWeight: latest.weight,
+      previousWeight: null,
+      daysElapsed: 0,
+      diff: 0,
+      weeklyRate: 0,
+      totalChange,
+      startWeight: first.weight
+    };
+  }
+
+  const d1 = new Date(previous.date);
+  const d2 = new Date(latest.date);
+  const daysDiff = Math.max(1, Math.round((d2 - d1) / 86400000));
+  const diff = Number((latest.weight - previous.weight).toFixed(2));
+  const weeklyRate = Number(((diff / daysDiff) * 7).toFixed(2));
+
+  return {
+    latestWeight: latest.weight,
+    previousWeight: previous.weight,
+    daysElapsed: daysDiff,
+    diff,
+    weeklyRate,
+    totalChange,
+    startWeight: first.weight
+  };
+}
+
+/**
+ * Time-Aware Weight Trend Smoothing.
+ * Accounts for real elapsed days between check-ins.
+ * @param {Array<{ date: string, weight: number }>} records
+ * @param {number} [dailyAlpha=0.1]
  * @returns {Array<{ date: string, weight: number, trendWeight: number }>}
  */
-export function calculateTrendWeights(records, smoothingFactor = 0.1) {
+export function calculateTrendWeights(records, dailyAlpha = 0.1) {
   if (!Array.isArray(records) || records.length === 0) return [];
   
-  let currentTrend = records[0].weight;
-  return records.map((entry, index) => {
+  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+  let currentTrend = sorted[0].weight;
+  
+  return sorted.map((entry, index) => {
     if (index === 0) {
       currentTrend = entry.weight;
     } else {
-      currentTrend = (entry.weight * smoothingFactor) + (currentTrend * (1 - smoothingFactor));
+      const prevDate = new Date(sorted[index - 1].date);
+      const currDate = new Date(entry.date);
+      const days = Math.max(1, Math.round((currDate - prevDate) / 86400000));
+      // Effective alpha across elapsed days: 1 - (1 - alpha)^days
+      // If gap is long (e.g. multi-week or multi-month), effectiveAlpha approaches 1.0
+      const effectiveAlpha = Math.min(1, 1 - Math.pow(1 - dailyAlpha, days));
+      currentTrend = (entry.weight * effectiveAlpha) + (currentTrend * (1 - effectiveAlpha));
     }
     return {
       ...entry,

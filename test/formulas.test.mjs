@@ -14,7 +14,8 @@ import {
   mifflinStJeorBmr,
   revisedHarrisBenedictBmr,
   calculateTdee,
-  calculateTrendWeights
+  calculateTrendWeights,
+  calculatePaceAndProgress
 } from '../frontend/formulas.js';
 
 test('calculateAge calculates exact completed years correctly', () => {
@@ -144,4 +145,27 @@ test('calculateTrendWeights smooths erratic daily weight spikes', () => {
   // Day 2 trend: 71.5 * 0.1 + 70.0 * 0.9 = 7.15 + 63 = 70.15 (not the noisy 71.5!)
   assert.equal(smoothed[1].trendWeight, 70.15);
   assert.ok(smoothed[1].trendWeight < 70.5, 'Spike was properly dampened by smoothing');
+});
+
+test('calculateTrendWeights snaps when there is a multi-month gap', () => {
+  const recordsWithGap = [
+    { date: '2026-01-01', weight: 70.0 },
+    { date: '2026-06-01', weight: 64.0 } // 5 months gap!
+  ];
+  const smoothed = calculateTrendWeights(recordsWithGap, 0.1);
+  // Because 5 months elapsed, the old weight decays and the trend snaps to the new weight (within 0.1kg)
+  assert.ok(smoothed[1].trendWeight <= 64.1, `Expected trend to snap near 64.0 after 5 months, got ${smoothed[1].trendWeight}`);
+});
+
+test('calculatePaceAndProgress calculates weekly rate and net change accurately', () => {
+  const checkins = [
+    { date: '2026-08-20', weight: 66.85 },
+    { date: '2026-09-24', weight: 64.85 } // -2.00 kg in 35 days (5 weeks) -> -0.40 kg/week!
+  ];
+  const pace = calculatePaceAndProgress(checkins);
+  assert.equal(pace.latestWeight, 64.85);
+  assert.equal(pace.diff, -2.00);
+  assert.equal(pace.daysElapsed, 35);
+  assert.equal(pace.weeklyRate, -0.40);
+  assert.equal(pace.totalChange, -2.00);
 });
