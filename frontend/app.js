@@ -23,6 +23,7 @@ const state = {
   records: storage.get('health_records', []),
   timeframe: '30d',
   chartMode: 'weight',
+  formulaTab: 'all',
   isAuthenticated: true,
   chart: null
 };
@@ -122,6 +123,16 @@ function initEventHandlers() {
       e.target.classList.add('active');
       state.chartMode = e.target.dataset.metric;
       updateChart();
+    });
+  });
+
+  // Formula tab selector pills
+  document.querySelectorAll('.formula-tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      document.querySelectorAll('.formula-tab-btn').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      state.formulaTab = e.target.dataset.tab;
+      renderFormulas();
     });
   });
 
@@ -455,7 +466,7 @@ function renderFormulas() {
 
   if (!p || !p.heightCm || records.length === 0) {
     container.innerHTML = `
-      <div class="formula-card" style="grid-column: 1/-1; text-align: center; color: var(--color-text-muted);">
+      <div class="formula-table-card" style="grid-column: 1/-1; text-align: center; color: var(--color-text-muted); padding: 2.5rem 1rem;">
         Add profile details (height, age, sex) and log weight to unlock multi-formula analysis.
       </div>
     `;
@@ -487,115 +498,223 @@ function renderFormulas() {
   const bmrHarris = revisedHarrisBenedictBmr(latestWeight, heightCm, age, sex);
   const tdee = calculateTdee(bmrMifflin);
 
-  container.innerHTML = `
-    <!-- BMI Formulas -->
-    <div class="formula-card">
-      <div class="formula-card-header">
+  const activeTab = state.formulaTab || 'all';
+
+  const bmiCard = `
+    <div class="formula-table-card">
+      <div class="formula-table-card-header">
         <h3>⚖️ Body Mass Index (BMI)</h3>
         <span class="badge ${category.badgeClass}">${category.category}</span>
       </div>
-      <div class="formula-row">
-        <span class="label">Standard WHO BMI:</span>
-        <span class="value">${stdBmi.toFixed(2)}</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Oxford "New" BMI:</span>
-        <span class="value">${nBmi.toFixed(2)}</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">BMI Prime:</span>
-        <span class="value">${prime.toFixed(2)} (${prime < 1 ? 'Under normal max' : 'Over normal max'})</span>
-      </div>
-      <div class="formula-description">
-        Standard WHO uses weight/height². Oxford formula scales height to 2.5 to avoid distorting taller or shorter heights.
-      </div>
-    </div>
-
-    <!-- Body Fat % Estimations -->
-    <div class="formula-card">
-      <div class="formula-card-header">
-        <h3>🧬 Body Fat Percentage</h3>
-        <span class="badge badge-normal">~${bfDeurenberg.toFixed(1)}%</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Deurenberg (1991):</span>
-        <span class="value">${bfDeurenberg.toFixed(1)}%</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Gallagher (1996):</span>
-        <span class="value">${bfGallagher.toFixed(1)}%</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">CUN-BAE (Navarra 2012):</span>
-        <span class="value">${bfCunBae.toFixed(1)}%</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Lean Body Mass:</span>
-        <span class="value">${compDeurenberg.leanMassKg.toFixed(1)} kg</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Estimated Fat Mass:</span>
-        <span class="value">${compDeurenberg.fatMassKg.toFixed(1)} kg</span>
-      </div>
-      <div class="formula-description">
-        Estimates biological adiposity using regression modeling across BMI, age, and sex distributions.
-      </div>
-    </div>
-
-    <!-- Ideal Body Weight -->
-    <div class="formula-card">
-      <div class="formula-card-header">
-        <h3>🎯 Ideal Weight Standards</h3>
-        <span class="badge badge-normal">${ibw.average.toFixed(1)} kg avg</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Devine (1974):</span>
-        <span class="value">${ibw.devine.toFixed(1)} kg</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Robinson (1983):</span>
-        <span class="value">${ibw.robinson.toFixed(1)} kg</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Miller (1983):</span>
-        <span class="value">${ibw.miller.toFixed(1)} kg</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">WHO Healthy Range:</span>
-        <span class="value">${ibw.healthyRange[0].toFixed(1)} - ${ibw.healthyRange[1].toFixed(1)} kg</span>
-      </div>
-      <div class="formula-description">
-        Calculates reference target weights used in clinical pharmacology and sports science.
-      </div>
-    </div>
-
-    <!-- BMR & Daily Maintenance Calories -->
-    <div class="formula-card">
-      <div class="formula-card-header">
-        <h3>🔥 Metabolic Energy (BMR/TDEE)</h3>
-        <span class="badge badge-normal">${bmrMifflin} kcal</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Mifflin-St Jeor (Resting):</span>
-        <span class="value">${bmrMifflin} kcal/day</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Harris-Benedict (Resting):</span>
-        <span class="value">${bmrHarris} kcal/day</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Sedentary Maintenance:</span>
-        <span class="value">${tdee.sedentary} kcal/day</span>
-      </div>
-      <div class="formula-row">
-        <span class="label">Moderate Exercise (3-5x/wk):</span>
-        <span class="value">${tdee.moderate} kcal/day</span>
-      </div>
-      <div class="formula-description">
-        Energy burned at complete rest (BMR), plus estimated total daily burn with activity (TDEE).
+      <table class="formula-table">
+        <thead>
+          <tr>
+            <th>Formula / Metric</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <span class="formula-name">Standard WHO BMI</span>
+              <span class="formula-note">Clinical standard: Weight (kg) / Height (m)²</span>
+            </td>
+            <td><span class="formula-val">${stdBmi.toFixed(2)}</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Oxford "New" BMI</span>
+              <span class="formula-note">Trefethen formula: Scales height to 2.5</span>
+            </td>
+            <td><span class="formula-val">${nBmi.toFixed(2)}</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">BMI Prime</span>
+              <span class="formula-note">Ratio to 25.0 upper limit (${prime < 1 ? 'Under normal max' : 'Over normal max'})</span>
+            </td>
+            <td><span class="formula-val">${prime.toFixed(2)}</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="formula-table-footer">
+        Standard WHO category: 18.5 – 24.9 is Normal weight.
       </div>
     </div>
   `;
+
+  const fatCard = `
+    <div class="formula-table-card">
+      <div class="formula-table-card-header">
+        <h3>🧬 Body Fat Percentage (%BF)</h3>
+        <span class="badge badge-normal">~${bfDeurenberg.toFixed(1)}%</span>
+      </div>
+      <table class="formula-table">
+        <thead>
+          <tr>
+            <th>Formula / Estimator</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <span class="formula-name">Deurenberg (1991)</span>
+              <span class="formula-note">Adult regression model based on BMI & Age</span>
+            </td>
+            <td><span class="formula-val">${bfDeurenberg.toFixed(1)}%</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Gallagher (1996)</span>
+              <span class="formula-note">Clinical multi-ethnic regression study</span>
+            </td>
+            <td><span class="formula-val">${bfGallagher.toFixed(1)}%</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">CUN-BAE (Navarra 2012)</span>
+              <span class="formula-note">Non-linear body adiposity estimator</span>
+            </td>
+            <td><span class="formula-val">${bfCunBae.toFixed(1)}%</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Lean Body Mass</span>
+              <span class="formula-note">Fat-free muscle, bone, and water mass</span>
+            </td>
+            <td><span class="formula-val" style="color: #38bdf8;">${compDeurenberg.leanMassKg.toFixed(1)} kg</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Estimated Fat Mass</span>
+              <span class="formula-note">Total adipose body weight</span>
+            </td>
+            <td><span class="formula-val" style="color: #f59e0b;">${compDeurenberg.fatMassKg.toFixed(1)} kg</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="formula-table-footer">
+        Estimates biological adiposity without requiring skinfold calipers or DEXA scans.
+      </div>
+    </div>
+  `;
+
+  const ibwCard = `
+    <div class="formula-table-card">
+      <div class="formula-table-card-header">
+        <h3>🎯 Ideal Weight Standards (IBW)</h3>
+        <span class="badge badge-normal">${ibw.average.toFixed(1)} kg avg</span>
+      </div>
+      <table class="formula-table">
+        <thead>
+          <tr>
+            <th>Clinical Standard</th>
+            <th>Target</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <span class="formula-name">Devine Formula (1974)</span>
+              <span class="formula-note">Pharmacology dosing baseline</span>
+            </td>
+            <td><span class="formula-val">${ibw.devine.toFixed(1)} kg</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Robinson Formula (1983)</span>
+              <span class="formula-note">Metabolic rate revision</span>
+            </td>
+            <td><span class="formula-val">${ibw.robinson.toFixed(1)} kg</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Miller Formula (1983)</span>
+              <span class="formula-note">Adjusted for lean muscle frame</span>
+            </td>
+            <td><span class="formula-val">${ibw.miller.toFixed(1)} kg</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Hamwi Formula (1964)</span>
+              <span class="formula-note">Clinical thumb-rule standard</span>
+            </td>
+            <td><span class="formula-val">${ibw.hamwi.toFixed(1)} kg</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">WHO Healthy Range</span>
+              <span class="formula-note">Standard BMI 18.5 – 24.9 window</span>
+            </td>
+            <td><span class="formula-val">${ibw.healthyRange[0].toFixed(1)} – ${ibw.healthyRange[1].toFixed(1)} kg</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="formula-table-footer">
+        Calculates reference target weights used in clinical pharmacology and sports science.
+      </div>
+    </div>
+  `;
+
+  const tdeeCard = `
+    <div class="formula-table-card">
+      <div class="formula-table-card-header">
+        <h3>🔥 Metabolic Energy (BMR/TDEE)</h3>
+        <span class="badge badge-normal">${bmrMifflin} kcal</span>
+      </div>
+      <table class="formula-table">
+        <thead>
+          <tr>
+            <th>Energy Metric</th>
+            <th>Daily Burn</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <span class="formula-name">Mifflin-St Jeor (BMR)</span>
+              <span class="formula-note">Resting expenditure at complete rest</span>
+            </td>
+            <td><span class="formula-val">${bmrMifflin} kcal/day</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Revised Harris-Benedict</span>
+              <span class="formula-note">Resting energy expenditure (1984)</span>
+            </td>
+            <td><span class="formula-val">${bmrHarris} kcal/day</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Sedentary Maintenance (TDEE)</span>
+              <span class="formula-note">Desk work / Little or no exercise (1.2×)</span>
+            </td>
+            <td><span class="formula-val">${tdee.sedentary} kcal/day</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="formula-name">Moderate Exercise (TDEE)</span>
+              <span class="formula-note">Active training 3–5 days/week (1.55×)</span>
+            </td>
+            <td><span class="formula-val">${tdee.moderate} kcal/day</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="formula-table-footer">
+        Resting burn (BMR) plus total daily maintenance calories with activity.
+      </div>
+    </div>
+  `;
+
+  let html = '';
+  if (activeTab === 'bmi') html = bmiCard;
+  else if (activeTab === 'fat') html = fatCard;
+  else if (activeTab === 'ibw') html = ibwCard;
+  else if (activeTab === 'tdee') html = tdeeCard;
+  else html = bmiCard + fatCard + ibwCard + tdeeCard;
+
+  container.innerHTML = html;
 }
 
 // --- History List Rendering ---

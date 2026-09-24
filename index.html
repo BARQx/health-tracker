@@ -99,8 +99,17 @@
 
     <!-- Multi-Formula Breakdown Section -->
     <section>
-      <h2 class="section-title">📊 Multi-Formula Health Analysis</h2>
-      <div id="formula-cards-container" class="formula-grid" style="margin-top: 0.75rem;">
+      <div class="formula-section-header">
+        <h2 class="section-title">📊 Multi-Formula Health Analysis</h2>
+        <div class="pill-group" id="formula-tab-group">
+          <button class="pill-btn formula-tab-btn active" data-tab="all">All</button>
+          <button class="pill-btn formula-tab-btn" data-tab="bmi">⚖️ BMI</button>
+          <button class="pill-btn formula-tab-btn" data-tab="fat">🧬 Body Fat</button>
+          <button class="pill-btn formula-tab-btn" data-tab="ibw">🎯 Ideal Weight</button>
+          <button class="pill-btn formula-tab-btn" data-tab="tdee">🔥 Energy</button>
+        </div>
+      </div>
+      <div id="formula-cards-container" class="formula-grid" style="margin-top: 0.85rem;">
         <!-- Dynamically rendered by app.js -->
       </div>
     </section>
