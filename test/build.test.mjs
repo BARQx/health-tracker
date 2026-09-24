@@ -24,6 +24,15 @@ test('build script produces minified assets in dist/', () => {
   assert.ok(existsSync(path.join(distDir, 'frontend', 'app.js')), 'dist/frontend/app.js should exist');
   assert.ok(existsSync(path.join(distDir, 'frontend', 'state.js')), 'dist/frontend/state.js should exist');
   assert.ok(existsSync(path.join(distDir, 'frontend', 'views', 'history-view.js')), 'dist/frontend/views/history-view.js should exist');
+  assert.ok(existsSync(path.join(distDir, 'frontend', 'styles', 'base.css')), 'dist/frontend/styles/base.css should exist');
+  assert.ok(existsSync(path.join(distDir, 'frontend', 'styles', 'header.css')), 'dist/frontend/styles/header.css should exist');
+  assert.ok(existsSync(path.join(distDir, 'frontend', 'styles', 'dialogs.css')), 'dist/frontend/styles/dialogs.css should exist');
+
+  const stylesMinContent = readFileSync(stylesMinPath, 'utf8');
+  assert.ok(stylesMinContent.includes('--color-bg'), 'styles.min.css should include base tokens');
+  assert.ok(stylesMinContent.includes('.app-header'), 'styles.min.css should include header styles');
+  assert.ok(stylesMinContent.includes('.checkin-banner'), 'styles.min.css should include cadence banner styles');
+  assert.ok(stylesMinContent.includes('.toast'), 'styles.min.css should include toast styles');
 
   const htmlContent = readFileSync(indexHtmlPath, 'utf8');
   assert.ok(htmlContent.includes('styles.min.css'), 'dist/index.html should reference styles.min.css');

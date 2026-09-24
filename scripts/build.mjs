@@ -18,11 +18,11 @@ await mkdir(distDir, { recursive: true });
 // 2. Minify CSS
 console.log('🎨 Minifying styles.css...');
 const cssPath = path.join(rootDir, 'frontend', 'styles.css');
-const cssRaw = await readFile(cssPath, 'utf8');
 const minifiedCssResult = new CleanCSS({
   level: 2,
-  compatibility: '*'
-}).minify(cssRaw);
+  compatibility: '*',
+  inline: ['all']
+}).minify([cssPath]);
 
 if (minifiedCssResult.errors.length > 0) {
   throw new Error(`CSS minification failed: ${minifiedCssResult.errors.join(', ')}`);
