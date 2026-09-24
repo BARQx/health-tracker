@@ -573,9 +573,9 @@ function renderHeroStats() {
               day: 'numeric',
               year: 'numeric'
             });
-            targetSubEl.innerHTML = `🎯 <strong>Est. Goal: ${dateStr}</strong> · ~${forecast.weeksNeeded} wks<br><small style="color: var(--color-text-muted);">Next: ${forecast.milestoneWeight.toFixed(1)} kg in ~${forecast.milestoneWeeks} wks</small>`;
+            targetSubEl.innerHTML = `Est. <strong>${dateStr}</strong> (~${forecast.weeksNeeded} wks)`;
           } else {
-            targetSubEl.textContent = `Target: ${targetWeight.toFixed(2)} kg · Keep logging to project ETA`;
+            targetSubEl.textContent = `Target: ${targetWeight.toFixed(2)} kg`;
           }
         }
       } else {

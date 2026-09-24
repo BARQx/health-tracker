@@ -256,10 +256,8 @@ body {
 
 .stat-subtext {
   font-size: 0.82rem;
+  line-height: 1.35;
   color: var(--color-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
 }
 
 .delta-positive {
