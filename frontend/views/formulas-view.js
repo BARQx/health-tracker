@@ -1,5 +1,6 @@
 import { $, $$ } from '../dom.js';
 import { state, setFormulaTab } from '../state.js';
+import { openLogModal } from '../record-modal.js';
 import {
   calculateAge,
   standardBmi,
@@ -285,52 +286,113 @@ export function renderFormulas() {
   const whrCat = getWhrCategory(whr, sex);
   const whtrCat = getWhtrCategory(whtr);
 
+  const whtrPct = whtr > 0 ? Math.min(100, Math.max(0, Math.round(((whtr - 0.35) / (0.65 - 0.35)) * 100))) : null;
+
   const tapeCard = `
-    <div class="formula-table-card">
+    <div class="formula-table-card tape-featured-card">
       <div class="formula-table-card-header">
-        <h3>📏 Tape Measurements & Ratios</h3>
-        ${hasAnyMeasurement ? `<span class="badge ${whtrCat.badgeClass}">${whtrCat.category}</span>` : '<span class="badge badge-normal">No data</span>'}
+        <h3>
+          <span>📏</span>
+          <span>Tape Measurements & Visceral Adiposity</span>
+        </h3>
+        ${hasAnyMeasurement ? `<span class="badge ${whtrCat.badgeClass}">${whtrCat.category} (WHtR ${whtr > 0 ? whtr.toFixed(3) : '--'})</span>` : '<span class="badge badge-normal">No data</span>'}
       </div>
       ${!hasAnyMeasurement ? `
-        <div style="text-align: center; color: var(--color-text-muted); padding: 2rem 1rem;">
-          Add body measurements (waist, hip, neck) when logging weight to unlock circumference-based analysis.
+        <div class="tape-empty-state">
+          <div class="tape-empty-icon">📐</div>
+          <div class="tape-empty-title">Circumference Ratios Unlocked on Next Log</div>
+          <p class="tape-empty-text">
+            Standard BMI cannot distinguish muscle from visceral fat. Track your waist, hip, and neck to unlock clinical Waist-to-Height Ratio (WHtR) and US Navy body fat analysis.
+          </p>
+          <button type="button" class="btn-secondary" id="btn-open-tape-log">
+            ➕ Log Tape Measurements
+          </button>
         </div>
       ` : `
-        <table class="formula-table">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th>Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${waist ? `<tr><td><span class="formula-name">Waist</span><span class="formula-note">Circumference at navel level</span></td><td><span class="formula-val">${Number(waist).toFixed(1)} cm</span></td></tr>` : ''}
-            ${hip ? `<tr><td><span class="formula-name">Hip</span><span class="formula-note">Widest circumference around glutes</span></td><td><span class="formula-val">${Number(hip).toFixed(1)} cm</span></td></tr>` : ''}
-            ${neck ? `<tr><td><span class="formula-name">Neck</span><span class="formula-note">Below larynx, perpendicular to axis</span></td><td><span class="formula-val">${Number(neck).toFixed(1)} cm</span></td></tr>` : ''}
-            ${chest ? `<tr><td><span class="formula-name">Chest</span><span class="formula-note">At nipple line, relaxed exhale</span></td><td><span class="formula-val">${Number(chest).toFixed(1)} cm</span></td></tr>` : ''}
-            ${arm ? `<tr><td><span class="formula-name">Arm / Bicep</span><span class="formula-note">Mid-upper arm, flexed peak</span></td><td><span class="formula-val">${Number(arm).toFixed(1)} cm</span></td></tr>` : ''}
-            ${thigh ? `<tr><td><span class="formula-name">Thigh</span><span class="formula-note">Mid-thigh, standing relaxed</span></td><td><span class="formula-val">${Number(thigh).toFixed(1)} cm</span></td></tr>` : ''}
-            ${whr > 0 ? `<tr><td><span class="formula-name">Waist-to-Hip Ratio (WHR)</span><span class="formula-note">WHO cardiovascular risk marker · ${whrCat.category}</span></td><td><span class="formula-val">${whr.toFixed(3)}</span></td></tr>` : ''}
-            ${whtr > 0 ? `<tr><td><span class="formula-name">Waist-to-Height Ratio (WHtR)</span><span class="formula-note">Universal health boundary: &lt;0.5 = healthy</span></td><td><span class="formula-val">${whtr.toFixed(3)}</span></td></tr>` : ''}
-            ${navyBf > 0 ? `<tr><td><span class="formula-name">US Navy Body Fat %</span><span class="formula-note">DoD circumference-based estimate</span></td><td><span class="formula-val">${navyBf.toFixed(1)}%</span></td></tr>` : ''}
-          </tbody>
-        </table>
+        <div class="tape-hero-grid">
+          <div class="tape-hero-tile">
+            <span class="tape-hero-label">Waist-to-Height (WHtR)</span>
+            <div class="tape-hero-value">
+              ${whtr > 0 ? whtr.toFixed(3) : '--'}
+            </div>
+            <span class="tape-hero-sub">
+              ${whtr > 0 ? (whtr < 0.5 ? '🟢 < 0.50 (Healthy Target)' : '⚠️ ≥ 0.50 (Elevated Risk)') : 'Requires waist & height'}
+            </span>
+          </div>
+          <div class="tape-hero-tile">
+            <span class="tape-hero-label">Waist-to-Hip (WHR)</span>
+            <div class="tape-hero-value">
+              ${whr > 0 ? whr.toFixed(3) : '--'}
+            </div>
+            <span class="tape-hero-sub">
+              ${whr > 0 ? `WHO Threshold: ${sex === 'female' ? '0.85' : '0.90'} (${whrCat.category})` : 'Requires waist & hip'}
+            </span>
+          </div>
+          <div class="tape-hero-tile">
+            <span class="tape-hero-label">US Navy Body Fat</span>
+            <div class="tape-hero-value" style="color: var(--color-primary);">
+              ${navyBf > 0 ? navyBf.toFixed(1) + '%' : '--'}
+            </div>
+            <span class="tape-hero-sub">
+              ${navyBf > 0 ? 'Circumference DoD formula' : 'Requires waist & neck' + (sex === 'female' ? ' & hip' : '')}
+            </span>
+          </div>
+        </div>
+
+        ${whtr > 0 ? `
+          <div class="tape-meter-section">
+            <div class="tape-meter-header">
+              <span class="tape-meter-title">Waist-to-Height Risk Spectrum</span>
+              <span class="badge ${whtrCat.badgeClass}">${whtr.toFixed(3)} · ${whtrCat.category}</span>
+            </div>
+            <div class="tape-meter-track">
+              <div class="tape-meter-segment seg-underweight" title="Underweight (< 0.43)"></div>
+              <div class="tape-meter-segment seg-healthy" title="Healthy (0.43 – 0.499)"></div>
+              <div class="tape-meter-segment seg-overweight" title="Increased Risk (0.50 – 0.579)"></div>
+              <div class="tape-meter-segment seg-obese" title="High Risk (≥ 0.58)"></div>
+              <div class="tape-meter-pointer" style="left: ${whtrPct}%;">
+                <div class="tape-pointer-arrow">▼</div>
+              </div>
+            </div>
+            <div class="tape-meter-legend">
+              <span>0.35</span>
+              <span>0.43 (Under)</span>
+              <span class="legend-target">0.50 (Target Max)</span>
+              <span>0.58 (High)</span>
+              <span>0.65+</span>
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="tape-details-section">
+          <div class="tape-details-heading">Recorded Body Circumferences</div>
+          <div class="tape-measurements-chips">
+            ${waist ? `<div class="tape-chip"><span class="chip-name">Waist (navel):</span><span class="chip-val">${Number(waist).toFixed(1)} cm</span></div>` : ''}
+            ${hip ? `<div class="tape-chip"><span class="chip-name">Hip (glutes):</span><span class="chip-val">${Number(hip).toFixed(1)} cm</span></div>` : ''}
+            ${neck ? `<div class="tape-chip"><span class="chip-name">Neck:</span><span class="chip-val">${Number(neck).toFixed(1)} cm</span></div>` : ''}
+            ${chest ? `<div class="tape-chip"><span class="chip-name">Chest:</span><span class="chip-val">${Number(chest).toFixed(1)} cm</span></div>` : ''}
+            ${arm ? `<div class="tape-chip"><span class="chip-name">Arm / Bicep:</span><span class="chip-val">${Number(arm).toFixed(1)} cm</span></div>` : ''}
+            ${thigh ? `<div class="tape-chip"><span class="chip-name">Thigh:</span><span class="chip-val">${Number(thigh).toFixed(1)} cm</span></div>` : ''}
+          </div>
+        </div>
       `}
-      <div class="formula-table-footer">
-        Circumference-based metrics are clinically superior to BMI for predicting cardiovascular risk.
+      <div class="formula-table-footer tape-footer-note">
+        💡 <strong>Why this outperforms BMI:</strong> BMI is a height-weight ratio that cannot differentiate lean muscle frame from visceral adipose tissue. Waist-to-Height Ratio (WHtR &lt; 0.50) specifically isolates intra-abdominal visceral fat surrounding internal organs, providing superior clinical screening for metabolic syndrome and cardiovascular risk.
       </div>
     </div>
   `;
 
   let html = '';
-  if (activeTab === 'bmi') html = bmiCard;
+  if (activeTab === 'tape') html = tapeCard;
+  else if (activeTab === 'bmi') html = bmiCard;
   else if (activeTab === 'fat') html = fatCard;
   else if (activeTab === 'ibw') html = ibwCard;
   else if (activeTab === 'tdee') html = tdeeCard;
-  else if (activeTab === 'tape') html = tapeCard;
-  else html = bmiCard + fatCard + ibwCard + tdeeCard + tapeCard;
+  else html = tapeCard + bmiCard + fatCard + ibwCard + tdeeCard;
 
   container.innerHTML = html;
+
+  $('#btn-open-tape-log', container)?.addEventListener('click', () => openLogModal());
 }
 
 export function initFormulaTabs() {
