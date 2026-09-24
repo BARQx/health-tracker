@@ -429,3 +429,101 @@ export function calculateTrendWeights(records, dailyAlpha = 0.1) {
     };
   });
 }
+
+/**
+ * Converts feet and inches to centimeters.
+ * @param {number} feet
+ * @param {number} inches
+ * @returns {number}
+ */
+export function feetInchesToCm(feet, inches) {
+  const f = Number(feet) || 0;
+  const i = Number(inches) || 0;
+  const totalInches = f * 12 + i;
+  return Number((totalInches * 2.54).toFixed(1));
+}
+
+/**
+ * Converts centimeters to approximate feet and rounded inches.
+ * @param {number} cm
+ * @returns {{ feet: number, inches: number }}
+ */
+export function cmToFeetInches(cm) {
+  const val = Number(cm) || 0;
+  if (val <= 0) return { feet: 0, inches: 0 };
+  const totalInches = val / 2.54;
+  let feet = Math.floor(totalInches / 12);
+  let inches = Math.round(totalInches % 12);
+  if (inches === 12) {
+    feet += 1;
+    inches = 0;
+  }
+  return { feet, inches };
+}
+
+/**
+ * Projects calendar goal date and intermediate milestones based on current weekly rate.
+ * @param {number} latestWeight
+ * @param {number} targetWeight
+ * @param {number} weeklyRate - Negative for weight loss (e.g. -0.40)
+ * @param {string|Date} [latestDate=new Date()]
+ * @returns {{
+ *   status: 'on_track'|'reached'|'stalled'|'none',
+ *   diffToTarget: number,
+ *   weeksNeeded: number|null,
+ *   estimatedDate: Date|null,
+ *   milestoneWeight: number|null,
+ *   milestoneWeeks: number|null,
+ *   milestoneDate: Date|null
+ * }|null}
+ */
+export function calculateGoalForecast(latestWeight, targetWeight, weeklyRate, latestDate = new Date()) {
+  if (!targetWeight || !latestWeight) return null;
+
+  const diffToTarget = Number((latestWeight - targetWeight).toFixed(2));
+  if (diffToTarget <= 0) {
+    return {
+      status: 'reached',
+      diffToTarget,
+      weeksNeeded: 0,
+      estimatedDate: null,
+      milestoneWeight: null,
+      milestoneWeeks: null,
+      milestoneDate: null
+    };
+  }
+
+  // Weight loss goal where current pace is losing weight
+  if (weeklyRate < 0) {
+    const rate = Math.abs(weeklyRate);
+    const weeksNeeded = Math.ceil(diffToTarget / rate);
+    const baseDate = new Date(latestDate);
+    const estimatedDate = new Date(baseDate.getTime() + weeksNeeded * 7 * 86400000);
+
+    const milestoneDiff = Number((diffToTarget / 2).toFixed(2));
+    const milestoneWeight = Number((latestWeight - milestoneDiff).toFixed(2));
+    const milestoneWeeks = Math.max(1, Math.ceil(weeksNeeded / 2));
+    const milestoneDate = new Date(baseDate.getTime() + milestoneWeeks * 7 * 86400000);
+
+    return {
+      status: 'on_track',
+      diffToTarget,
+      weeksNeeded,
+      estimatedDate,
+      milestoneWeight,
+      milestoneWeeks,
+      milestoneDate
+    };
+  }
+
+  return {
+    status: 'stalled',
+    diffToTarget,
+    weeksNeeded: null,
+    estimatedDate: null,
+    milestoneWeight: null,
+    milestoneWeeks: null,
+    milestoneDate: null
+  };
+}
+

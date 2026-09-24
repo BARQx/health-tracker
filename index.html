@@ -45,6 +45,9 @@
       <button id="btn-edit-profile" class="btn-link">Edit Profile</button>
     </section>
 
+    <!-- Smart Check-in Cadence Banner -->
+    <div id="checkin-banner" class="checkin-banner" style="display: none;"></div>
+
     <!-- Hero Stats Cards -->
     <section class="hero-stats-grid">
       <div class="stat-card">
@@ -195,12 +198,38 @@
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label" for="profile-height">Height (cm)</label>
-        <input type="number" id="profile-height" class="form-control" step="0.1" min="30" max="300" placeholder="e.g. 175" required>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <label class="form-label" style="margin-bottom: 0;">Height</label>
+          <div class="pill-group height-unit-toggle">
+            <button type="button" class="pill-btn height-unit-btn active" data-unit="cm">cm</button>
+            <button type="button" class="pill-btn height-unit-btn" data-unit="ft">ft / in</button>
+          </div>
+        </div>
+        <div id="height-input-cm">
+          <input type="number" id="profile-height" class="form-control" step="0.1" min="30" max="300" placeholder="e.g. 165" required>
+        </div>
+        <div id="height-input-ft" class="form-row-2col" style="display: none;">
+          <div>
+            <label class="form-label-sub" for="profile-height-ft">Feet</label>
+            <input type="number" id="profile-height-ft" class="form-control" min="1" max="8" placeholder="5">
+          </div>
+          <div>
+            <label class="form-label-sub" for="profile-height-in">Inches</label>
+            <input type="number" id="profile-height-in" class="form-control" min="0" max="11" placeholder="5">
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label" for="profile-target-weight">Target Weight (kg, optional)</label>
-        <input type="number" id="profile-target-weight" class="form-control" step="0.1" min="20" max="500" placeholder="e.g. 65.0">
+        <input type="number" id="profile-target-weight" class="form-control" step="0.1" min="20" max="500" placeholder="e.g. 58.0">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="profile-cadence">Preferred Weigh-In Cadence</label>
+        <select id="profile-cadence" class="form-control">
+          <option value="weekly">Weekly (Every 7 days)</option>
+          <option value="biweekly">Bi-weekly (Every 14 days)</option>
+          <option value="monthly">Monthly (Every 30 days)</option>
+        </select>
       </div>
       <div class="dialog-footer">
         <button type="submit" class="btn-primary">Save Profile</button>

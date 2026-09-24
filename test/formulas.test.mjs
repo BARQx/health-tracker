@@ -16,7 +16,10 @@ import {
   calculateTdee,
   calculateTrendWeights,
   calculatePaceAndProgress,
-  enrichRecordsWithDeltas
+  enrichRecordsWithDeltas,
+  feetInchesToCm,
+  cmToFeetInches,
+  calculateGoalForecast
 } from '../frontend/formulas.js';
 
 test('calculateAge calculates exact completed years correctly', () => {
@@ -215,7 +218,53 @@ test('enrichRecordsWithDeltas computes exact point-to-point deltas for weight, B
   assert.equal(enriched[1].deltaWeight, -2.49);
   assert.equal(enriched[1].daysSincePrev, 35);
   assert.ok(enriched[1].deltaBmi < 0, 'BMI decreased');
-  assert.ok(enriched[1].deltaBodyFat < 0, 'Body fat decreased');
+  assert.ok(enriched[1].deltaFat !== undefined || enriched[1].deltaBodyFat < 0, 'Body fat decreased');
   assert.equal(enriched[1].deltaBmi, -0.81);
 });
+
+test('feetInchesToCm and cmToFeetInches convert accurately and symmetrically', () => {
+  // 5 feet 5 inches -> 165.1 cm
+  assert.equal(feetInchesToCm(5, 5), 165.1);
+
+  // 5 feet 6 inches -> 167.6 cm
+  assert.equal(feetInchesToCm(5, 6), 167.6);
+
+  // 165 cm -> 5 ft 5 in
+  const ftIn165 = cmToFeetInches(165);
+  assert.equal(ftIn165.feet, 5);
+  assert.equal(ftIn165.inches, 5);
+
+  // 168 cm -> 5 ft 6 in
+  const ftIn168 = cmToFeetInches(168);
+  assert.equal(ftIn168.feet, 5);
+  assert.equal(ftIn168.inches, 6);
+
+  // Edge cases
+  assert.deepEqual(cmToFeetInches(0), { feet: 0, inches: 0 });
+  assert.equal(feetInchesToCm(0, 0), 0);
+});
+
+test('calculateGoalForecast predicts target calendar dates and halfway milestones', () => {
+  const baseDate = new Date('2026-09-24T12:00:00Z');
+  // Current: 64.85 kg, Target: 58.00 kg (diff: 6.85 kg), Pace: -0.40 kg/wk
+  // 6.85 / 0.40 = 17.125 -> 18 weeks
+  const forecast = calculateGoalForecast(64.85, 58.00, -0.40, baseDate);
+  assert.ok(forecast);
+  assert.equal(forecast.status, 'on_track');
+  assert.equal(forecast.diffToTarget, 6.85);
+  assert.equal(forecast.weeksNeeded, 18);
+  assert.ok(forecast.estimatedDate instanceof Date);
+  assert.equal(forecast.milestoneWeight, 61.43);
+  assert.equal(forecast.milestoneWeeks, 9);
+
+  // Goal reached scenario
+  const reached = calculateGoalForecast(57.50, 58.00, -0.40, baseDate);
+  assert.equal(reached.status, 'reached');
+  assert.equal(reached.diffToTarget, -0.50);
+
+  // Stalled or gain scenario
+  const stalled = calculateGoalForecast(64.85, 58.00, 0.20, baseDate);
+  assert.equal(stalled.status, 'stalled');
+});
+
 

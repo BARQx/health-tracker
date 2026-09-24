@@ -16,7 +16,10 @@ import {
   calculateTdee,
   calculateTrendWeights,
   calculatePaceAndProgress,
-  enrichRecordsWithDeltas
+  enrichRecordsWithDeltas,
+  feetInchesToCm,
+  cmToFeetInches,
+  calculateGoalForecast
 } from './formulas.js';
 
 // --- State Management ---
@@ -152,6 +155,61 @@ function initEventHandlers() {
 
   // Auth unlock modal
   document.getElementById('auth-form')?.addEventListener('submit', handleAuthSubmit);
+
+  // Height unit switcher (cm vs ft/in)
+  document.querySelectorAll('.height-unit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      document.querySelectorAll('.height-unit-btn').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      const unit = e.target.dataset.unit;
+      const cmWrapper = document.getElementById('height-input-cm');
+      const ftWrapper = document.getElementById('height-input-ft');
+      if (unit === 'ft') {
+        if (cmWrapper) cmWrapper.style.display = 'none';
+        if (ftWrapper) ftWrapper.style.display = 'grid';
+        const cmVal = Number(document.getElementById('profile-height')?.value);
+        if (cmVal > 0) {
+          const { feet, inches } = cmToFeetInches(cmVal);
+          const ftEl = document.getElementById('profile-height-ft');
+          const inEl = document.getElementById('profile-height-in');
+          if (ftEl) ftEl.value = feet;
+          if (inEl) inEl.value = inches;
+        }
+      } else {
+        if (cmWrapper) cmWrapper.style.display = 'block';
+        if (ftWrapper) ftWrapper.style.display = 'none';
+        const f = Number(document.getElementById('profile-height-ft')?.value);
+        const i = Number(document.getElementById('profile-height-in')?.value);
+        if (f > 0) {
+          const cmEl = document.getElementById('profile-height');
+          if (cmEl) cmEl.value = feetInchesToCm(f, i);
+        }
+      }
+    });
+  });
+
+  const syncFtToCm = () => {
+    const f = Number(document.getElementById('profile-height-ft')?.value);
+    const i = Number(document.getElementById('profile-height-in')?.value);
+    if (f > 0) {
+      const cmEl = document.getElementById('profile-height');
+      if (cmEl) cmEl.value = feetInchesToCm(f, i);
+    }
+  };
+
+  document.getElementById('profile-height-ft')?.addEventListener('input', syncFtToCm);
+  document.getElementById('profile-height-in')?.addEventListener('input', syncFtToCm);
+
+  document.getElementById('profile-height')?.addEventListener('input', (e) => {
+    const cm = Number(e.target.value);
+    if (cm > 0) {
+      const { feet, inches } = cmToFeetInches(cm);
+      const ftEl = document.getElementById('profile-height-ft');
+      const inEl = document.getElementById('profile-height-in');
+      if (ftEl) ftEl.value = feet;
+      if (inEl) inEl.value = inches;
+    }
+  });
 }
 
 // --- Data Synchronization ---
@@ -227,18 +285,46 @@ function openProfileModal() {
   document.getElementById('profile-birthdate').value = p.birthDate ? p.birthDate.split('T')[0] : '';
   document.getElementById('profile-sex').value = p.sex || 'male';
   document.getElementById('profile-height').value = p.heightCm || '';
+  if (p.heightCm) {
+    const { feet, inches } = cmToFeetInches(p.heightCm);
+    const ftEl = document.getElementById('profile-height-ft');
+    const inEl = document.getElementById('profile-height-in');
+    if (ftEl) ftEl.value = feet;
+    if (inEl) inEl.value = inches;
+  }
   document.getElementById('profile-target-weight').value = p.targetWeightKg || '';
+  const cadenceEl = document.getElementById('profile-cadence');
+  if (cadenceEl) cadenceEl.value = p.checkinCadence || 'weekly';
+
+  // Default unit tab to cm
+  document.querySelectorAll('.height-unit-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.height-unit-btn[data-unit="cm"]')?.classList.add('active');
+  const cmWrapper = document.getElementById('height-input-cm');
+  const ftWrapper = document.getElementById('height-input-ft');
+  if (cmWrapper) cmWrapper.style.display = 'block';
+  if (ftWrapper) ftWrapper.style.display = 'none';
+
   dialog.showModal();
 }
 
 async function handleProfileSubmit(e) {
   e.preventDefault();
+  let height = Number(document.getElementById('profile-height').value);
+  if (!height) {
+    const f = Number(document.getElementById('profile-height-ft')?.value);
+    const i = Number(document.getElementById('profile-height-in')?.value);
+    if (f > 0) {
+      height = feetInchesToCm(f, i);
+    }
+  }
+
   const profile = {
     name: document.getElementById('profile-name').value.trim(),
     birthDate: document.getElementById('profile-birthdate').value,
     sex: document.getElementById('profile-sex').value,
-    heightCm: Number(document.getElementById('profile-height').value),
-    targetWeightKg: document.getElementById('profile-target-weight').value ? Number(document.getElementById('profile-target-weight').value) : null
+    heightCm: height,
+    targetWeightKg: document.getElementById('profile-target-weight').value ? Number(document.getElementById('profile-target-weight').value) : null,
+    checkinCadence: document.getElementById('profile-cadence')?.value || 'weekly'
   };
 
   state.profile = profile;
@@ -336,10 +422,59 @@ async function deleteRecord(date) {
 // --- Render Main Application ---
 function renderApp() {
   renderProfileBar();
+  renderCheckinBanner();
   renderHeroStats();
   updateChart();
   renderFormulas();
   renderHistory();
+}
+
+function renderCheckinBanner() {
+  const banner = document.getElementById('checkin-banner');
+  if (!banner) return;
+
+  const records = state.records;
+  if (!records || records.length === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+  const latest = sorted[sorted.length - 1];
+  const daysAgo = Math.max(0, Math.round((Date.now() - new Date(latest.date).getTime()) / 86400000));
+
+  const cadence = state.profile?.checkinCadence || 'weekly';
+  const cadenceDays = cadence === 'monthly' ? 30 : (cadence === 'biweekly' ? 14 : 7);
+  const cadenceLabel = cadence === 'monthly' ? 'Monthly' : (cadence === 'biweekly' ? 'Bi-weekly' : 'Weekly');
+
+  banner.style.display = 'flex';
+
+  if (daysAgo >= cadenceDays) {
+    banner.className = 'checkin-banner due';
+    banner.innerHTML = `
+      <div class="checkin-banner-content">
+        <span>⏰</span>
+        <span>
+          <strong>${cadenceLabel} Weigh-in Due</strong> · Last recorded ${daysAgo} days ago (${latest.date}). Step on the scale to keep your streak!
+        </span>
+      </div>
+      <button type="button" class="checkin-banner-action" id="btn-banner-log">➕ Log Weigh-in</button>
+    `;
+  } else {
+    const daysLeft = cadenceDays - daysAgo;
+    banner.className = 'checkin-banner on-track';
+    banner.innerHTML = `
+      <div class="checkin-banner-content">
+        <span>✓</span>
+        <span>
+          <strong>On Track</strong> · Logged ${daysAgo === 0 ? 'today' : `${daysAgo}d ago`} (${latest.weight.toFixed(2)} kg). Next ${cadenceLabel.toLowerCase()} check-in in ~${daysLeft}d.
+        </span>
+      </div>
+      <button type="button" class="checkin-banner-action" id="btn-banner-log">➕ Log Check-in</button>
+    `;
+  }
+
+  document.getElementById('btn-banner-log')?.addEventListener('click', () => openLogModal());
 }
 
 function renderProfileBar() {
@@ -422,18 +557,25 @@ function renderHeroStats() {
     totalProgressEl.innerHTML = `${pace.timeframeLabel}: <strong class="${colorClass}">${sign}${pace.timeframeChange.toFixed(2)} kg</strong>`;
   }
 
-  // Card 3: Target Progress
+  // Card 3: Target Progress & Forecast
   if (targetEl) {
     if (targetWeight) {
-      const diffToTarget = pace.latestWeight - targetWeight;
+      const diffToTarget = Number((pace.latestWeight - targetWeight).toFixed(2));
+      const latestDateStr = records[records.length - 1]?.date;
+      const forecast = calculateGoalForecast(pace.latestWeight, targetWeight, pace.weeklyRate, latestDateStr);
+
       if (diffToTarget > 0) {
         targetEl.textContent = `${diffToTarget.toFixed(2)} kg to goal`;
         if (targetSubEl) {
-          if (pace.weeklyRate < 0) {
-            const weeksNeeded = Math.ceil(diffToTarget / Math.abs(pace.weeklyRate));
-            targetSubEl.textContent = `~${weeksNeeded} weeks at current pace`;
+          if (forecast && forecast.status === 'on_track') {
+            const dateStr = forecast.estimatedDate.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            });
+            targetSubEl.innerHTML = `🎯 <strong>Est. Goal: ${dateStr}</strong> · ~${forecast.weeksNeeded} wks<br><small style="color: var(--color-text-muted);">Next: ${forecast.milestoneWeight.toFixed(1)} kg in ~${forecast.milestoneWeeks} wks</small>`;
           } else {
-            targetSubEl.textContent = `Target: ${targetWeight.toFixed(2)} kg`;
+            targetSubEl.textContent = `Target: ${targetWeight.toFixed(2)} kg · Keep logging to project ETA`;
           }
         }
       } else {
@@ -765,66 +907,126 @@ function renderHistory() {
   const container = document.getElementById('history-list-container');
   if (!container) return;
 
-  const records = [...state.records].reverse(); // Most recent first
+  const records = [...state.records].sort((a, b) => b.date.localeCompare(a.date)); // Descending by date
   if (records.length === 0) {
     container.innerHTML = '<div style="text-align: center; color: var(--color-text-muted); padding: 2rem;">No weight logs found. Tap "+ Log Weight" to start.</div>';
     return;
   }
 
-  container.innerHTML = records.map((r, i) => {
-    const nextRec = records[i + 1];
-    let diffMarkup = '';
-    if (nextRec) {
-      const diff = r.weight - nextRec.weight;
-      const isLoss = diff <= 0;
-      const arrow = isLoss ? '▼' : '▲';
-      const sign = diff > 0 ? '+' : '';
-      const colorClass = isLoss ? 'delta-negative' : 'delta-positive';
-      diffMarkup = `<div class="history-delta ${colorClass}">${arrow} ${sign}${diff.toFixed(2)} kg</div>`;
-    } else {
-      diffMarkup = `<div class="history-delta" style="color: var(--color-text-muted);">Baseline</div>`;
-    }
+  // Group records by Year
+  const yearGroups = {};
+  for (const r of records) {
+    const year = r.date.split('-')[0];
+    if (!yearGroups[year]) yearGroups[year] = [];
+    yearGroups[year].push(r);
+  }
 
-    const dateInfo = formatDisplayDate(r.date);
-    const tagsMarkup = (r.tags || []).map(t => `<span class="tag-badge">${t}</span>`).join('');
+  const sortedYears = Object.keys(yearGroups).sort((a, b) => b.localeCompare(a));
 
-    return `
-      <div class="history-item">
-        <div class="history-left">
-          <div class="history-date">
-            <span>${dateInfo.formatted}</span>
-            ${dateInfo.weekday ? `<span class="history-weekday">${dateInfo.weekday}</span>` : ''}
+  container.innerHTML = sortedYears.map((year, idx) => {
+    const list = yearGroups[year];
+    // list is sorted descending: list[0] is latest in year, list[list.length - 1] is first in year
+    const startWeight = list[list.length - 1].weight;
+    const endWeight = list[0].weight;
+    const net = Number((endWeight - startWeight).toFixed(2));
+    const isLoss = net <= 0;
+    const arrow = isLoss ? '▼' : '▲';
+    const sign = net > 0 ? '+' : '';
+    const colorClass = isLoss ? 'delta-negative' : 'delta-positive';
+    const netBadge = list.length > 1
+      ? `<span class="history-year-badge ${colorClass}">${arrow} ${sign}${net.toFixed(2)} kg</span>`
+      : '';
+
+    // Expand current/latest year by default, collapse older years (e.g. 2021)
+    const isCollapsed = idx > 0;
+
+    const itemsHtml = list.map((r) => {
+      const chronoIdx = state.records.findIndex(rec => rec.date === r.date);
+      let diffMarkup = '';
+      if (chronoIdx > 0) {
+        const prevRec = state.records[chronoIdx - 1];
+        const diff = Number((r.weight - prevRec.weight).toFixed(2));
+        const itemLoss = diff <= 0;
+        const itemArrow = itemLoss ? '▼' : '▲';
+        const itemSign = diff > 0 ? '+' : '';
+        const itemColorClass = itemLoss ? 'delta-negative' : 'delta-positive';
+        diffMarkup = `<div class="history-delta ${itemColorClass}">${itemArrow} ${itemSign}${diff.toFixed(2)} kg</div>`;
+      } else {
+        diffMarkup = `<div class="history-delta" style="color: var(--color-text-muted);">Baseline</div>`;
+      }
+
+      const dateInfo = formatDisplayDate(r.date);
+      const tagsMarkup = (r.tags || []).map(t => `<span class="tag-badge">${t}</span>`).join('');
+
+      return `
+        <div class="history-item">
+          <div class="history-left">
+            <div class="history-date">
+              <span>${dateInfo.formatted}</span>
+              ${dateInfo.weekday ? `<span class="history-weekday">${dateInfo.weekday}</span>` : ''}
+            </div>
+            <div class="history-sub">
+              ${tagsMarkup ? `<div class="history-tags">${tagsMarkup}</div>` : ''}
+              ${r.notes ? `<div class="history-notes" title="${r.notes}">${r.notes}</div>` : ''}
+            </div>
           </div>
-          <div class="history-sub">
-            ${tagsMarkup ? `<div class="history-tags">${tagsMarkup}</div>` : ''}
-            ${r.notes ? `<div class="history-notes" title="${r.notes}">${r.notes}</div>` : ''}
+          <div class="history-right">
+            <div class="history-metric">
+              <div class="history-val">${r.weight.toFixed(2)}<span class="history-unit">kg</span></div>
+              ${diffMarkup}
+            </div>
+            <div class="history-actions">
+              <button class="btn-item-action" data-edit-date="${r.date}" title="Edit entry" aria-label="Edit entry">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              </button>
+              <button class="btn-item-action btn-item-delete" data-delete-date="${r.date}" title="Delete entry" aria-label="Delete entry">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
           </div>
         </div>
-        <div class="history-right">
-          <div class="history-metric">
-            <div class="history-val">${r.weight.toFixed(2)}<span class="history-unit">kg</span></div>
-            ${diffMarkup}
+      `;
+    }).join('');
+
+    return `
+      <div class="history-year-group ${isCollapsed ? 'collapsed' : ''}" data-year="${year}">
+        <div class="history-year-header">
+          <div class="history-year-title">
+            <span>📅 ${year}</span>
+            <span class="history-year-badge">${list.length} check-in${list.length === 1 ? '' : 's'}</span>
           </div>
-          <div class="history-actions">
-            <button class="btn-item-action" data-edit-date="${r.date}" title="Edit entry" aria-label="Edit entry">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-            </button>
-            <button class="btn-item-action btn-item-delete" data-delete-date="${r.date}" title="Delete entry" aria-label="Delete entry">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-            </button>
+          <div class="history-year-meta">
+            ${netBadge}
+            <span class="history-year-chevron">▼</span>
           </div>
+        </div>
+        <div class="history-year-entries">
+          ${itemsHtml}
         </div>
       </div>
     `;
   }).join('');
 
+  // Wire collapse toggles
+  container.querySelectorAll('.history-year-header').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      hdr.closest('.history-year-group')?.classList.toggle('collapsed');
+    });
+  });
+
   // Wire edit and delete buttons
   container.querySelectorAll('[data-edit-date]').forEach(btn => {
-    btn.addEventListener('click', () => openLogModal(btn.dataset.editDate));
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLogModal(btn.dataset.editDate);
+    });
   });
 
   container.querySelectorAll('[data-delete-date]').forEach(btn => {
-    btn.addEventListener('click', () => deleteRecord(btn.dataset.deleteDate));
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteRecord(btn.dataset.deleteDate);
+    });
   });
 }
 
