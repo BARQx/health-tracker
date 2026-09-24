@@ -514,14 +514,15 @@ body {
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.65rem;
 }
 
 .history-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.85rem 1.15rem;
+  gap: 0.75rem;
+  padding: 0.9rem 1.15rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-input-bg);
@@ -530,17 +531,47 @@ body {
 
 .history-item:hover {
   border-color: rgba(255, 255, 255, 0.25);
+  background: var(--color-surface-hover);
+}
+
+.history-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .history-date {
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.history-weekday {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm);
+}
+
+.history-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .history-tags {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
-  margin-top: 0.25rem;
 }
 
 .tag-badge {
@@ -550,44 +581,102 @@ body {
   background: var(--color-surface-hover);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
 }
 
-.history-weight {
-  text-align: right;
+.history-notes {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.history-right {
   display: flex;
   align-items: center;
-  gap: 1.1rem;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.history-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .history-val {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.history-unit {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-left: 2px;
+}
+
+.history-delta {
+  font-size: 0.76rem;
+  font-weight: 600;
+  margin-top: 2px;
+  white-space: nowrap;
 }
 
 .history-actions {
   display: flex;
+  align-items: center;
   gap: 0.35rem;
 }
 
 .btn-item-action {
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   cursor: pointer;
-  padding: 0.4rem;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-sm);
   transition: var(--transition);
 }
 
 .btn-item-action:hover {
   color: var(--color-text-primary);
-  background: var(--color-surface);
-  border-color: var(--color-border);
+  border-color: #38bdf8;
+  background: var(--color-surface-hover);
 }
 
 .btn-item-delete:hover {
   color: var(--color-danger);
-  border-color: var(--color-danger-fade);
+  border-color: var(--color-danger);
+  background: var(--color-danger-fade);
+}
+
+@media (max-width: 600px) {
+  .history-item {
+    padding: 0.85rem 0.95rem;
+    gap: 0.6rem;
+  }
+  .history-val {
+    font-size: 1.12rem;
+  }
+  .history-right {
+    gap: 0.65rem;
+  }
+  .history-notes {
+    max-width: 140px;
+  }
 }
 
 /* Floating Action Button / Mobile Sticky Footer */

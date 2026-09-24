@@ -718,13 +718,28 @@ function renderFormulas() {
 }
 
 // --- History List Rendering ---
+function formatDisplayDate(dateStr) {
+  try {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return {
+      formatted: `${monthNames[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
+      weekday: dayNames[d.getDay()]
+    };
+  } catch {
+    return { formatted: dateStr, weekday: '' };
+  }
+}
+
 function renderHistory() {
   const container = document.getElementById('history-list-container');
   if (!container) return;
 
   const records = [...state.records].reverse(); // Most recent first
   if (records.length === 0) {
-    container.innerHTML = '<div style="text-align: center; color: var(--color-text-muted); padding: 1.5rem;">No weight logs found.</div>';
+    container.innerHTML = '<div style="text-align: center; color: var(--color-text-muted); padding: 2rem;">No weight logs found. Tap "+ Log Weight" to start.</div>';
     return;
   }
 
@@ -733,25 +748,42 @@ function renderHistory() {
     let diffMarkup = '';
     if (nextRec) {
       const diff = r.weight - nextRec.weight;
-      const sign = diff >= 0 ? '+' : '';
-      const colorClass = diff <= 0 ? 'delta-negative' : 'delta-positive';
-      diffMarkup = `<small class="${colorClass}">(${sign}${diff.toFixed(2)})</small>`;
+      const isLoss = diff <= 0;
+      const arrow = isLoss ? '▼' : '▲';
+      const sign = diff > 0 ? '+' : '';
+      const colorClass = isLoss ? 'delta-negative' : 'delta-positive';
+      diffMarkup = `<div class="history-delta ${colorClass}">${arrow} ${sign}${diff.toFixed(2)} kg</div>`;
+    } else {
+      diffMarkup = `<div class="history-delta" style="color: var(--color-text-muted);">Baseline</div>`;
     }
 
+    const dateInfo = formatDisplayDate(r.date);
     const tagsMarkup = (r.tags || []).map(t => `<span class="tag-badge">${t}</span>`).join('');
 
     return `
       <div class="history-item">
-        <div>
-          <div class="history-date">${r.date}</div>
-          ${tagsMarkup ? `<div class="history-tags">${tagsMarkup}</div>` : ''}
-          ${r.notes ? `<div style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 2px;">${r.notes}</div>` : ''}
+        <div class="history-left">
+          <div class="history-date">
+            <span>${dateInfo.formatted}</span>
+            ${dateInfo.weekday ? `<span class="history-weekday">${dateInfo.weekday}</span>` : ''}
+          </div>
+          <div class="history-sub">
+            ${tagsMarkup ? `<div class="history-tags">${tagsMarkup}</div>` : ''}
+            ${r.notes ? `<div class="history-notes" title="${r.notes}">${r.notes}</div>` : ''}
+          </div>
         </div>
-        <div class="history-weight">
-          <div class="history-val">${r.weight.toFixed(2)} kg ${diffMarkup}</div>
+        <div class="history-right">
+          <div class="history-metric">
+            <div class="history-val">${r.weight.toFixed(2)}<span class="history-unit">kg</span></div>
+            ${diffMarkup}
+          </div>
           <div class="history-actions">
-            <button class="btn-item-action" data-edit-date="${r.date}" title="Edit entry">✏️</button>
-            <button class="btn-item-action btn-item-delete" data-delete-date="${r.date}" title="Delete entry">🗑️</button>
+            <button class="btn-item-action" data-edit-date="${r.date}" title="Edit entry" aria-label="Edit entry">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </button>
+            <button class="btn-item-action btn-item-delete" data-delete-date="${r.date}" title="Delete entry" aria-label="Delete entry">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
           </div>
         </div>
       </div>
