@@ -11,7 +11,7 @@
     "dev": "vercel dev",
     "db:migrate": "node scripts/migrate.mjs",
     "build": "node scripts/build.mjs",
-    "test": "node --test test/formulas.test.mjs test/build.test.mjs"
+    "test": "node --test test/formulas.test.mjs test/build.test.mjs test/modules.test.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

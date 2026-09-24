@@ -21,6 +21,9 @@ test('build script produces minified assets in dist/', () => {
   assert.ok(existsSync(stylesMinPath), 'dist/styles.min.css should exist');
   assert.ok(existsSync(indexHtmlPath), 'dist/index.html should exist');
   assert.ok(existsSync(formulasJsPath), 'dist/frontend/formulas.js should exist');
+  assert.ok(existsSync(path.join(distDir, 'frontend', 'app.js')), 'dist/frontend/app.js should exist');
+  assert.ok(existsSync(path.join(distDir, 'frontend', 'state.js')), 'dist/frontend/state.js should exist');
+  assert.ok(existsSync(path.join(distDir, 'frontend', 'views', 'history-view.js')), 'dist/frontend/views/history-view.js should exist');
 
   const htmlContent = readFileSync(indexHtmlPath, 'utf8');
   assert.ok(htmlContent.includes('styles.min.css'), 'dist/index.html should reference styles.min.css');
