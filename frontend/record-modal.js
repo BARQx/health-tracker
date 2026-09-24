@@ -70,15 +70,14 @@ async function handleLogSubmit(e) {
 
 export async function handleDeleteRecord(date) {
   if (!confirm(`Delete record for ${date}?`)) return;
-
-  removeRecord(date);
-  showToast('Record deleted');
-
   try {
     await deleteRecordRemote(date);
+    // Remote deletion succeeded, update local state
+    removeRecord(date);
+    showToast('Record deleted');
   } catch (err) {
     console.error('Remote delete failed:', err);
-    showToast(err.message || 'Offline: record removed locally');
+    showToast(err.message || 'Failed to delete record');
   }
 }
 
