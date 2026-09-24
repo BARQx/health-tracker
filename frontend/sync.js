@@ -24,10 +24,10 @@ export async function submitAuth(password) {
 
 export async function fetchProfile() {
   const res = await fetch('/api/profile');
-  if (res.ok) {
-    return await res.json();
+  if (!res.ok) {
+    throw new Error(`Failed to fetch profile (HTTP ${res.status})`);
   }
-  return { profile: null };
+  return await res.json();
 }
 
 export async function saveProfileRemote(profile) {
@@ -45,10 +45,10 @@ export async function saveProfileRemote(profile) {
 
 export async function fetchRecords() {
   const res = await fetch('/api/records');
-  if (res.ok) {
-    return await res.json();
+  if (!res.ok) {
+    throw new Error(`Failed to fetch records (HTTP ${res.status})`);
   }
-  return { records: [] };
+  return await res.json();
 }
 
 export async function saveRecordRemote(record) {
@@ -104,21 +104,30 @@ export async function syncRemoteData({ onAuthRequired, onProfileSetupRequired } 
       }
       return;
     }
+  } catch (err) {
+    console.warn('Auth check failed, working in offline/cached mode:', err);
+    return;
+  }
 
-    // Fetch profile
+  // Fetch profile (independent of records)
+  try {
     const profileData = await fetchProfile();
     if (profileData.profile) {
       setProfile(profileData.profile);
     } else if (!state.profile && typeof onProfileSetupRequired === 'function') {
       onProfileSetupRequired();
     }
+  } catch (err) {
+    console.warn('Profile sync failed, using cached profile:', err);
+  }
 
-    // Fetch records
+  // Fetch records (independent of profile)
+  try {
     const recordsData = await fetchRecords();
     if (Array.isArray(recordsData.records)) {
       setRecords(recordsData.records);
     }
   } catch (err) {
-    console.warn('Working in offline/cached mode:', err);
+    console.warn('Records sync failed, using cached records:', err);
   }
 }

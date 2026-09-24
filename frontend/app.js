@@ -16,12 +16,14 @@ import { renderHistory } from './views/history-view.js';
 import { syncRemoteData, exportData } from './sync.js';
 
 function renderApp() {
-  renderProfileBar();
-  renderCheckinBanner();
-  renderHeroStats();
-  updateChart();
-  renderFormulas();
-  renderHistory();
+  const renders = [renderProfileBar, renderCheckinBanner, renderHeroStats, updateChart, renderFormulas, renderHistory];
+  for (const fn of renders) {
+    try {
+      fn();
+    } catch (err) {
+      console.error(`Error in ${fn.name}:`, err);
+    }
+  }
 }
 
 function initEventHandlers() {
