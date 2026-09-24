@@ -527,3 +527,26 @@ export function calculateGoalForecast(latestWeight, targetWeight, weeklyRate, la
   };
 }
 
+/**
+ * Sanitizes, validates, and defensively normalizes historical weight records.
+ * Strips corrupted or missing values, coerces numeric weights, and sorts chronologically.
+ * @param {Array<any>} list
+ * @returns {Array<{ date: string, weight: number, notes: string|null, tags: string[], measurements: object }>}
+ */
+export function sanitizeRecords(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter(r => r && typeof r === 'object' && r.date && r.weight !== null && r.weight !== undefined)
+    .map(r => ({
+      ...r,
+      date: String(r.date).trim(),
+      weight: Number(r.weight),
+      notes: r.notes ? String(r.notes).trim() : null,
+      tags: Array.isArray(r.tags) ? r.tags.map(t => String(t).trim()).filter(Boolean) : [],
+      measurements: r.measurements && typeof r.measurements === 'object' ? r.measurements : {}
+    }))
+    .filter(r => !isNaN(r.weight) && r.weight > 0 && /^\d{4}-\d{2}-\d{2}/.test(r.date))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+

@@ -19,7 +19,8 @@ import {
   enrichRecordsWithDeltas,
   feetInchesToCm,
   cmToFeetInches,
-  calculateGoalForecast
+  calculateGoalForecast,
+  sanitizeRecords
 } from '../frontend/formulas.js';
 
 test('calculateAge calculates exact completed years correctly', () => {
@@ -266,5 +267,39 @@ test('calculateGoalForecast predicts target calendar dates and halfway milestone
   const stalled = calculateGoalForecast(64.85, 58.00, 0.20, baseDate);
   assert.equal(stalled.status, 'stalled');
 });
+
+test('sanitizeRecords normalizes, coerces numbers, and purges corrupt entries', () => {
+  const corruptInput = [
+    null,
+    undefined,
+    {},
+    { date: 'invalid-date', weight: 65 },
+    { date: '2026-08-20', weight: '66.85', notes: '   Good rest  ', tags: [' Morning ', ''] },
+    { date: '2026-06-10', weight: 66.10, measurements: { waistCm: 80 } },
+    { date: '2026-07-01', weight: null },
+    { date: '2026-07-02', weight: -10 },
+    { date: '2026-07-03', weight: 'not-a-number' }
+  ];
+
+  const cleaned = sanitizeRecords(corruptInput);
+  assert.equal(cleaned.length, 2);
+
+  // Sorted chronologically
+  assert.equal(cleaned[0].date, '2026-06-10');
+  assert.equal(cleaned[0].weight, 66.10);
+  assert.deepEqual(cleaned[0].measurements, { waistCm: 80 });
+
+  assert.equal(cleaned[1].date, '2026-08-20');
+  assert.equal(typeof cleaned[1].weight, 'number');
+  assert.equal(cleaned[1].weight, 66.85);
+  assert.equal(cleaned[1].notes, 'Good rest');
+  assert.deepEqual(cleaned[1].tags, ['Morning']);
+
+  // Non-array input
+  assert.deepEqual(sanitizeRecords(null), []);
+  assert.deepEqual(sanitizeRecords(undefined), []);
+  assert.deepEqual(sanitizeRecords('string'), []);
+});
+
 
 

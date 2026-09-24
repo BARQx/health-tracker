@@ -35,12 +35,13 @@ export class HealthChart {
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
-    const width = rect.width || 600;
-    const height = rect.height || 280;
+    const width = rect.width > 0 ? rect.width : (this.width || 600);
+    const height = rect.height > 0 ? rect.height : (this.height || 280);
 
     this.pixelRatio = window.devicePixelRatio || 1;
-    this.canvas.width = width * this.pixelRatio;
-    this.canvas.height = height * this.pixelRatio;
+    this.canvas.width = Math.round(width * this.pixelRatio);
+    this.canvas.height = Math.round(height * this.pixelRatio);
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(this.pixelRatio, this.pixelRatio);
 
     this.width = width;
@@ -115,6 +116,7 @@ export class HealthChart {
   }
 
   render() {
+    this.resize();
     const ctx = this.ctx;
     const width = this.width;
     const height = this.height;
@@ -124,10 +126,12 @@ export class HealthChart {
 
     if (!this.data || this.data.length === 0) {
       ctx.fillStyle = colors.textMuted;
-      ctx.font = '14px system-ui, -apple-system, sans-serif';
+      ctx.font = '13px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('No entries in this timeframe. Tap "+ Log Weight" to record a check-in.', width / 2, height / 2);
+      ctx.fillText('No check-ins logged in this timeframe.', width / 2, height / 2 - 10);
+      ctx.font = '12px system-ui, -apple-system, sans-serif';
+      ctx.fillText('Select 90D, 1Y, or All to view previous records.', width / 2, height / 2 + 12);
       return;
     }
 
@@ -137,17 +141,17 @@ export class HealthChart {
 
     // Extract values based on active mode
     const items = this.data.map(d => {
-      let val = d.weight;
-      let delta = d.deltaWeight !== undefined ? d.deltaWeight : null;
+      let val = Number(d.weight || 0);
+      let delta = d.deltaWeight !== undefined && d.deltaWeight !== null ? Number(d.deltaWeight) : null;
       let unit = 'kg';
 
       if (this.mode === 'fat') {
-        val = d.bodyFat || 0;
-        delta = d.deltaBodyFat !== undefined ? d.deltaBodyFat : null;
+        val = Number(d.bodyFat || 0);
+        delta = d.deltaBodyFat !== undefined && d.deltaBodyFat !== null ? Number(d.deltaBodyFat) : null;
         unit = '%';
       } else if (this.mode === 'bmi') {
-        val = d.bmi || 0;
-        delta = d.deltaBmi !== undefined ? d.deltaBmi : null;
+        val = Number(d.bmi || 0);
+        delta = d.deltaBmi !== undefined && d.deltaBmi !== null ? Number(d.deltaBmi) : null;
         unit = '';
       }
 
@@ -159,9 +163,9 @@ export class HealthChart {
       };
     });
 
-    let allValues = items.map(d => d.plotValue);
-    if (this.mode === 'weight' && this.targetWeight) {
-      allValues.push(this.targetWeight);
+    let allValues = items.map(d => d.plotValue).filter(v => !isNaN(v));
+    if (this.mode === 'weight' && this.targetWeight && !isNaN(this.targetWeight)) {
+      allValues.push(Number(this.targetWeight));
     }
 
     let minVal = Math.min(...allValues);

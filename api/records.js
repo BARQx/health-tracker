@@ -76,7 +76,8 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      const date = req.query.date || req.body?.date;
+      const url = new URL(req.url || '', 'http://localhost');
+      const date = req.query?.date || url.searchParams.get('date') || req.body?.date;
       if (!date) {
         return res.status(400).json({ error: 'Date parameter is required to delete an entry' });
       }

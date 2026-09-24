@@ -19,14 +19,16 @@ import {
   enrichRecordsWithDeltas,
   feetInchesToCm,
   cmToFeetInches,
-  calculateGoalForecast
+  calculateGoalForecast,
+  sanitizeRecords
 } from './formulas.js';
 
 // --- State Management ---
 const state = {
   profile: storage.get('health_profile', null),
-  records: storage.get('health_records', []),
+  records: sanitizeRecords(storage.get('health_records', [])),
   timeframe: '30d',
+  hasExplicitTimeframeSelection: false,
   chartMode: 'weight',
   formulaTab: 'all',
   isAuthenticated: true,
@@ -117,6 +119,7 @@ function initEventHandlers() {
       document.querySelectorAll('.timeframe-btn').forEach(b => b.classList.remove('active'));
       e.target.classList.add('active');
       state.timeframe = e.target.dataset.timeframe;
+      state.hasExplicitTimeframeSelection = true;
       updateChart();
       renderHeroStats();
     });
@@ -242,7 +245,7 @@ async function syncRemoteData() {
     if (recordsRes.ok) {
       const recordsData = await recordsRes.json();
       if (Array.isArray(recordsData.records)) {
-        state.records = recordsData.records;
+        state.records = sanitizeRecords(recordsData.records);
         storage.set('health_records', state.records);
       }
     }
@@ -413,9 +416,15 @@ async function deleteRecord(date) {
   showToast('Record deleted');
 
   try {
-    await fetch(`/api/records?date=${date}`, { method: 'DELETE' });
+    const res = await fetch(`/api/records?date=${encodeURIComponent(date)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.error('Remote delete failed:', errData);
+      showToast(errData.error || 'Server sync failed for deletion');
+    }
   } catch (err) {
     console.error('Remote delete failed:', err);
+    showToast('Offline: record removed locally');
   }
 }
 
@@ -607,21 +616,33 @@ function updateChart() {
   // Compute exact point-to-point deltas and metrics across full historical records
   const enriched = enrichRecordsWithDeltas(records, heightCm, age, sex);
 
-  // Filter by timeframe
-  let filtered = enriched;
+  // Timeframe filter helper
   const now = new Date();
-  if (state.timeframe === '7d') {
-    const cut = new Date(now.getTime() - 7 * 86400000);
-    filtered = enriched.filter(r => new Date(r.date) >= cut);
-  } else if (state.timeframe === '30d') {
-    const cut = new Date(now.getTime() - 30 * 86400000);
-    filtered = enriched.filter(r => new Date(r.date) >= cut);
-  } else if (state.timeframe === '90d') {
-    const cut = new Date(now.getTime() - 90 * 86400000);
-    filtered = enriched.filter(r => new Date(r.date) >= cut);
-  } else if (state.timeframe === '1y') {
-    const cut = new Date(now.getTime() - 365 * 86400000);
-    filtered = enriched.filter(r => new Date(r.date) >= cut);
+  const filterByTf = (tf) => {
+    if (tf === '7d') return enriched.filter(r => new Date(r.date) >= new Date(now.getTime() - 7 * 86400000));
+    if (tf === '30d') return enriched.filter(r => new Date(r.date) >= new Date(now.getTime() - 30 * 86400000));
+    if (tf === '90d') return enriched.filter(r => new Date(r.date) >= new Date(now.getTime() - 90 * 86400000));
+    if (tf === '1y') return enriched.filter(r => new Date(r.date) >= new Date(now.getTime() - 365 * 86400000));
+    return enriched;
+  };
+
+  let filtered = filterByTf(state.timeframe);
+
+  // If current timeframe has 0 entries and user didn't explicitly pick it,
+  // gracefully auto-expand to the most relevant timeframe that contains records
+  if (filtered.length === 0 && enriched.length > 0 && !state.hasExplicitTimeframeSelection) {
+    const fallbackTfs = ['30d', '90d', '1y', 'all'];
+    for (const tf of fallbackTfs) {
+      const candidates = filterByTf(tf);
+      if (candidates.length > 0) {
+        state.timeframe = tf;
+        filtered = candidates;
+        document.querySelectorAll('.timeframe-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.timeframe === tf);
+        });
+        break;
+      }
+    }
   }
 
   state.chart.setData(filtered, state.profile?.targetWeightKg, state.chartMode);
@@ -907,105 +928,116 @@ function renderHistory() {
   const container = document.getElementById('history-list-container');
   if (!container) return;
 
-  const records = [...state.records].sort((a, b) => b.date.localeCompare(a.date)); // Descending by date
-  if (records.length === 0) {
+  const validRecords = (state.records || [])
+    .filter(r => r && r.date && r.weight !== null && r.weight !== undefined)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date))); // Descending by date
+
+  if (validRecords.length === 0) {
     container.innerHTML = '<div style="text-align: center; color: var(--color-text-muted); padding: 2rem;">No weight logs found. Tap "+ Log Weight" to start.</div>';
     return;
   }
 
-  // Group records by Year
-  const yearGroups = {};
-  for (const r of records) {
-    const year = r.date.split('-')[0];
-    if (!yearGroups[year]) yearGroups[year] = [];
-    yearGroups[year].push(r);
-  }
+  try {
+    // Group records by Year
+    const yearGroups = {};
+    for (const r of validRecords) {
+      const year = String(r.date).split('-')[0] || 'Unknown';
+      if (!yearGroups[year]) yearGroups[year] = [];
+      yearGroups[year].push(r);
+    }
 
-  const sortedYears = Object.keys(yearGroups).sort((a, b) => b.localeCompare(a));
+    const sortedYears = Object.keys(yearGroups).sort((a, b) => b.localeCompare(a));
 
-  container.innerHTML = sortedYears.map((year, idx) => {
-    const list = yearGroups[year];
-    // list is sorted descending: list[0] is latest in year, list[list.length - 1] is first in year
-    const startWeight = list[list.length - 1].weight;
-    const endWeight = list[0].weight;
-    const net = Number((endWeight - startWeight).toFixed(2));
-    const isLoss = net <= 0;
-    const arrow = isLoss ? '▼' : '▲';
-    const sign = net > 0 ? '+' : '';
-    const colorClass = isLoss ? 'delta-negative' : 'delta-positive';
-    const netBadge = list.length > 1
-      ? `<span class="history-year-badge ${colorClass}">${arrow} ${sign}${net.toFixed(2)} kg</span>`
-      : '';
+    container.innerHTML = sortedYears.map((year, idx) => {
+      const list = yearGroups[year];
+      // list is sorted descending: list[0] is latest in year, list[list.length - 1] is first in year
+      const startWeight = Number(list[list.length - 1].weight || 0);
+      const endWeight = Number(list[0].weight || 0);
+      const net = Number((endWeight - startWeight).toFixed(2));
+      const isLoss = net <= 0;
+      const arrow = isLoss ? '▼' : '▲';
+      const sign = net > 0 ? '+' : '';
+      const colorClass = isLoss ? 'delta-negative' : 'delta-positive';
+      const netBadge = list.length > 1
+        ? `<span class="history-year-badge ${colorClass}">${arrow} ${sign}${net.toFixed(2)} kg</span>`
+        : '';
 
-    // Expand current/latest year by default, collapse older years (e.g. 2021)
-    const isCollapsed = idx > 0;
+      // Expand current/latest year by default, collapse older years (e.g. 2021)
+      const isCollapsed = idx > 0;
 
-    const itemsHtml = list.map((r) => {
-      const chronoIdx = state.records.findIndex(rec => rec.date === r.date);
-      let diffMarkup = '';
-      if (chronoIdx > 0) {
-        const prevRec = state.records[chronoIdx - 1];
-        const diff = Number((r.weight - prevRec.weight).toFixed(2));
-        const itemLoss = diff <= 0;
-        const itemArrow = itemLoss ? '▼' : '▲';
-        const itemSign = diff > 0 ? '+' : '';
-        const itemColorClass = itemLoss ? 'delta-negative' : 'delta-positive';
-        diffMarkup = `<div class="history-delta ${itemColorClass}">${itemArrow} ${itemSign}${diff.toFixed(2)} kg</div>`;
-      } else {
-        diffMarkup = `<div class="history-delta" style="color: var(--color-text-muted);">Baseline</div>`;
-      }
+      const itemsHtml = list.map((r) => {
+        const chronoIdx = state.records.findIndex(rec => rec.date === r.date);
+        let diffMarkup = '';
+        if (chronoIdx > 0) {
+          const prevRec = state.records[chronoIdx - 1];
+          const prevWeight = Number(prevRec?.weight || 0);
+          const currWeight = Number(r.weight || 0);
+          const diff = Number((currWeight - prevWeight).toFixed(2));
+          const itemLoss = diff <= 0;
+          const itemArrow = itemLoss ? '▼' : '▲';
+          const itemSign = diff > 0 ? '+' : '';
+          const itemColorClass = itemLoss ? 'delta-negative' : 'delta-positive';
+          diffMarkup = `<div class="history-delta ${itemColorClass}">${itemArrow} ${itemSign}${diff.toFixed(2)} kg</div>`;
+        } else {
+          diffMarkup = `<div class="history-delta" style="color: var(--color-text-muted);">Baseline</div>`;
+        }
 
-      const dateInfo = formatDisplayDate(r.date);
-      const tagsMarkup = (r.tags || []).map(t => `<span class="tag-badge">${t}</span>`).join('');
+        const dateInfo = formatDisplayDate(r.date);
+        const tagsMarkup = (Array.isArray(r.tags) ? r.tags : []).map(t => `<span class="tag-badge">${t}</span>`).join('');
+        const numWeight = Number(r.weight || 0);
 
-      return `
-        <div class="history-item">
-          <div class="history-left">
-            <div class="history-date">
-              <span>${dateInfo.formatted}</span>
-              ${dateInfo.weekday ? `<span class="history-weekday">${dateInfo.weekday}</span>` : ''}
+        return `
+          <div class="history-item">
+            <div class="history-left">
+              <div class="history-date">
+                <span>${dateInfo.formatted}</span>
+                ${dateInfo.weekday ? `<span class="history-weekday">${dateInfo.weekday}</span>` : ''}
+              </div>
+              <div class="history-sub">
+                ${tagsMarkup ? `<div class="history-tags">${tagsMarkup}</div>` : ''}
+                ${r.notes ? `<div class="history-notes" title="${r.notes}">${r.notes}</div>` : ''}
+              </div>
             </div>
-            <div class="history-sub">
-              ${tagsMarkup ? `<div class="history-tags">${tagsMarkup}</div>` : ''}
-              ${r.notes ? `<div class="history-notes" title="${r.notes}">${r.notes}</div>` : ''}
+            <div class="history-right">
+              <div class="history-metric">
+                <div class="history-val">${numWeight.toFixed(2)}<span class="history-unit">kg</span></div>
+                ${diffMarkup}
+              </div>
+              <div class="history-actions">
+                <button class="btn-item-action" data-edit-date="${r.date}" title="Edit entry" aria-label="Edit entry">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button class="btn-item-action btn-item-delete" data-delete-date="${r.date}" title="Delete entry" aria-label="Delete entry">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
             </div>
           </div>
-          <div class="history-right">
-            <div class="history-metric">
-              <div class="history-val">${r.weight.toFixed(2)}<span class="history-unit">kg</span></div>
-              ${diffMarkup}
+        `;
+      }).join('');
+
+      return `
+        <div class="history-year-group ${isCollapsed ? 'collapsed' : ''}" data-year="${year}">
+          <div class="history-year-header">
+            <div class="history-year-title">
+              <span>📅 ${year}</span>
+              <span class="history-year-badge">${list.length} check-in${list.length === 1 ? '' : 's'}</span>
             </div>
-            <div class="history-actions">
-              <button class="btn-item-action" data-edit-date="${r.date}" title="Edit entry" aria-label="Edit entry">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-              </button>
-              <button class="btn-item-action btn-item-delete" data-delete-date="${r.date}" title="Delete entry" aria-label="Delete entry">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              </button>
+            <div class="history-year-meta">
+              ${netBadge}
+              <span class="history-year-chevron">▼</span>
             </div>
+          </div>
+          <div class="history-year-entries">
+            ${itemsHtml}
           </div>
         </div>
       `;
     }).join('');
-
-    return `
-      <div class="history-year-group ${isCollapsed ? 'collapsed' : ''}" data-year="${year}">
-        <div class="history-year-header">
-          <div class="history-year-title">
-            <span>📅 ${year}</span>
-            <span class="history-year-badge">${list.length} check-in${list.length === 1 ? '' : 's'}</span>
-          </div>
-          <div class="history-year-meta">
-            ${netBadge}
-            <span class="history-year-chevron">▼</span>
-          </div>
-        </div>
-        <div class="history-year-entries">
-          ${itemsHtml}
-        </div>
-      </div>
-    `;
-  }).join('');
+  } catch (err) {
+    console.error('Error rendering history list:', err);
+    container.innerHTML = '<div style="text-align: center; color: var(--color-danger); padding: 1.5rem;">Failed to render weight log history.</div>';
+  }
 
   // Wire collapse toggles
   container.querySelectorAll('.history-year-header').forEach(hdr => {
